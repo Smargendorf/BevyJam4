@@ -7,11 +7,11 @@ use rand_core::RngCore;
 
 mod camera;
 mod components;
-mod food;
+mod resources;
 
 use camera::*;
 use components::*;
-use food::Food;
+use resources::Food;
 
 const BACKGROUND_COLOR: Color = Color::rgb(0.1, 0.1, 0.1);
 const PLAYER_COLOR: Color = Color::rgb(1.0, 0.5, 0.5);
@@ -41,12 +41,13 @@ fn setup(
         Player,
     ));
 
-    for _ in 0..10
-    {
+    for _ in 0..10 {
         let transform = Transform::from_translation(Vec3::new(
             (rng.next_u32() as i32 % 500) as f32,
             (rng.next_u32() as i32 % 500) as f32,
-            1.0)).with_scale(ANT_SIZE);
+            1.0,
+        ))
+        .with_scale(ANT_SIZE);
 
         commands.spawn((
             MaterialMesh2dBundle {
@@ -55,7 +56,7 @@ fn setup(
                 transform: transform,
                 ..default()
             },
-            Ant
+            Ant,
         ));
     }
 }
