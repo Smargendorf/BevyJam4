@@ -70,11 +70,8 @@ fn main() {
     .add_plugins(TilemapPlugin)
     .insert_resource(FixedTime::new_from_secs(1.0 / 60.0))
     .insert_resource(ClearColor(BACKGROUND_COLOR))
-    .add_systems(Startup, world_map::world_map_startup)
-    .add_systems(Update, world_map::swap_texture_or_hide)
-    .add_systems(Startup, (setup, camera_setup))
-    .add_systems(Update, (move_player, camera_chase, scroll_events))
-    .add_systems(Update, bevy::window::close_on_esc)
+    .add_systems(Startup, (setup, camera_setup, world_map::world_map_startup))
+    .add_systems(Update, (move_player, camera_chase, scroll_events, world_map::swap_texture_or_hide, bevy::window::close_on_esc))
     .add_event::<MouseWheel>()
     .run();
 }
