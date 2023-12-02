@@ -7,9 +7,11 @@ use bevy::{
 use bevy_rand::prelude::*;
 use rand_core::RngCore;
 use bevy_prng::ChaCha8Rng;
+use bevy_ecs_tilemap::prelude::*;
 
 mod camera;
 mod components;
+mod world_map;
 
 use self::components::*;
 use self::camera::*;
@@ -63,8 +65,11 @@ fn main() {
     App::new()
     .add_plugins(DefaultPlugins)
     .add_plugins(EntropyPlugin::<ChaCha8Rng>::default())
+    .add_plugins(TilemapPlugin)
     .insert_resource(FixedTime::new_from_secs(1.0 / 60.0))
     .insert_resource(ClearColor(BACKGROUND_COLOR))
+    .add_systems(Startup, world_map::world_map_startup)
+    .add_systems(Update, world_map::swap_texture_or_hide)
     .add_systems(Startup, (setup, camera_setup))
     .add_systems(Update, (move_player, camera_chase, scroll_events))
     .add_systems(Update, bevy::window::close_on_esc)
