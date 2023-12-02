@@ -4,10 +4,12 @@ use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
 use bevy_prng::ChaCha8Rng;
 use bevy_rand::prelude::*;
 use rand_core::RngCore;
+use bevy_prng::ChaCha8Rng;
+use bevy_ecs_tilemap::prelude::*;
 
 mod camera;
 mod components;
-mod resources;
+mod world_map;
 
 use camera::*;
 use components::*;
@@ -63,11 +65,15 @@ fn setup(
 
 fn main() {
     App::new()
-        .add_plugins((DefaultPlugins, camera::CameraPlugin))
+        .add_plugins(DefaultPlugins)
         .add_plugins(EntropyPlugin::<ChaCha8Rng>::default())
+        .add_plugins(TilemapPlugin)
+        .add_plugins(camera::CameraPlugin)
         .insert_resource(FixedTime::new_from_secs(1.0 / 60.0))
         .insert_resource(ClearColor(BACKGROUND_COLOR))
-        .add_systems(Startup, (setup))
+        .add_systems(Startup, setup)
+        .add_systems(Startup, world_map::world_map_startup)
+        .add_systems(Update, world_map::swap_texture_or_hide)
         .add_systems(Update, bevy::window::close_on_esc)
         .add_event::<MouseWheel>()
         .run();
