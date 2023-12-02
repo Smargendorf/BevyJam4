@@ -63,12 +63,11 @@ fn setup(
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins((DefaultPlugins, camera::CameraPlugin))
         .add_plugins(EntropyPlugin::<ChaCha8Rng>::default())
         .insert_resource(FixedTime::new_from_secs(1.0 / 60.0))
         .insert_resource(ClearColor(BACKGROUND_COLOR))
-        .add_systems(Startup, (setup, camera_setup))
-        .add_systems(Update, (move_player, camera_chase, scroll_events))
+        .add_systems(Startup, (setup))
         .add_systems(Update, bevy::window::close_on_esc)
         .add_event::<MouseWheel>()
         .run();
