@@ -4,12 +4,12 @@ use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
 use bevy_prng::ChaCha8Rng;
 use bevy_rand::prelude::*;
 use rand_core::RngCore;
-use bevy_prng::ChaCha8Rng;
 use bevy_ecs_tilemap::prelude::*;
 
 mod camera;
 mod components;
 mod world_map;
+mod resources;
 
 use camera::*;
 use components::*;
