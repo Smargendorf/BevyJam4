@@ -49,7 +49,6 @@ fn setup(
     let texture_atlas_handle = texture_atlases.add(texture_atlas);
     // Use only the subset of sprites in the sheet that make up the run animation
     let animation_indices = AnimationIndices { first: 1, last: 3 };
-    commands.spawn(Camera2dBundle::default());
     commands.spawn((
         SpriteSheetBundle {
             texture_atlas: texture_atlas_handle,
