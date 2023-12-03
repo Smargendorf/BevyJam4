@@ -68,13 +68,9 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(EntropyPlugin::<ChaCha8Rng>::default())
-        .add_plugins(TilemapPlugin)
         .add_plugins(camera::CameraPlugin)
-        .insert_resource(FixedTime::new_from_secs(1.0 / 60.0))
         .insert_resource(ClearColor(BACKGROUND_COLOR))
-        .add_systems(Startup, world_map::world_map_startup)
-        .add_systems(Update, world_map::swap_texture_or_hide)
-        .add_systems(Startup, (setup, world_map::world_map_startup))
+        .add_systems(Startup, (setup))
         .add_systems(Update, bevy::window::close_on_esc)
         .add_systems(
             Update,
