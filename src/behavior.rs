@@ -64,7 +64,7 @@ fn ant_should_follow(ant_state: AntState, pher_kind: PheromoneKind) -> bool {
 fn ant_desired_direction(
     ant: &Ant,
     ant_trans: &Transform,
-    pheromones: &Query<(&Transform, &Pheromone)>,
+    pheromones: &Query<(&Transform, &Pheromone), Without<Ant>>,
 ) -> Vec2 {
     let (ant_dir, _, _) = ant_trans.rotation.to_euler(EulerRot::ZXY);
 
@@ -103,8 +103,8 @@ fn ant_desired_direction(
 }
 
 pub fn update_ant_movement(
-    mut ants: Query<(&mut Transform, &Ant)>,
-    pheromones: Query<(&Transform, &Pheromone)>,
+    mut ants: Query<(&mut Transform, &Ant), Without<Pheromone>>,
+    pheromones: Query<(&Transform, &Pheromone), Without<Ant>>,
     time: Res<Time>,
 ) {
     for (mut ant_trans, ant) in ants.iter_mut() {
@@ -124,7 +124,7 @@ pub const ANT_POOP_INTERVAL: f32 = 0.5;
 
 pub fn spawn_pheromones(
     mut commands: Commands,
-    mut ants: Query<(&Transform, &mut Ant)>,
+    mut ants: Query<(&Transform, &mut Ant), Without<Pheromone>>,
     time: Res<Time>,
 ) {
     for (ant_trans, mut ant) in ants.iter_mut() {
