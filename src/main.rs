@@ -76,6 +76,10 @@ fn main() {
         .add_systems(Update, world_map::swap_texture_or_hide)
         .add_systems(Startup, (setup, world_map::world_map_startup))
         .add_systems(Update, bevy::window::close_on_esc)
+        .add_systems(
+            Update,
+            (behavior::update_ant_movement, behavior::spawn_pheromones),
+        )
         .add_event::<MouseWheel>()
         .run();
 }

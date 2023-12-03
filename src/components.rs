@@ -8,16 +8,20 @@ pub struct Player;
 #[derive(Component)]
 pub struct Ant {
     pub state: AntState,
+    pub speed: f32,
     pub vision_range: f32,
     pub vision_arc: f32, // in radians
+    pub time_until_poop: f32,
 }
 
 impl Default for Ant {
     fn default() -> Self {
         Ant {
             state: AntState::Wandering,
+            speed: 1.0,
             vision_range: 1.0,
             vision_arc: 2.0,
+            time_until_poop: ANT_POOP_INTERVAL,
         }
     }
 }
