@@ -1,6 +1,7 @@
 use bevy::input::mouse::MouseWheel;
 use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
 
+use bevy_ecs_tilemap::prelude::*;
 use bevy_prng::ChaCha8Rng;
 use bevy_rand::prelude::*;
 use rand_core::RngCore;
@@ -8,9 +9,12 @@ use rand_core::RngCore;
 mod behavior;
 mod camera;
 mod components;
+mod resources;
+mod world_map;
 
-use self::camera::*;
-use self::components::*;
+use camera::*;
+use components::*;
+use resources::Food;
 
 const BACKGROUND_COLOR: Color = Color::rgb(0.1, 0.1, 0.1);
 const PLAYER_COLOR: Color = Color::rgb(1.0, 0.5, 0.5);
@@ -27,6 +31,8 @@ fn setup(
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut rng: ResMut<GlobalEntropy<ChaCha8Rng>>,
 ) {
+    commands.insert_resource(Food::default());
+
     // Player
     commands.spawn((
         MaterialMesh2dBundle {
@@ -62,10 +68,13 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(EntropyPlugin::<ChaCha8Rng>::default())
+        .add_plugins(TilemapPlugin)
+        .add_plugins(camera::CameraPlugin)
         .insert_resource(FixedTime::new_from_secs(1.0 / 60.0))
         .insert_resource(ClearColor(BACKGROUND_COLOR))
-        .add_systems(Startup, (setup, camera_setup))
-        .add_systems(Update, (move_player, camera_chase, scroll_events))
+        .add_systems(Startup, world_map::world_map_startup)
+        .add_systems(Update, world_map::swap_texture_or_hide)
+        .add_systems(Startup, (setup, world_map::world_map_startup))
         .add_systems(Update, bevy::window::close_on_esc)
         .add_event::<MouseWheel>()
         .run();
