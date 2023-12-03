@@ -18,7 +18,6 @@ pub fn camera_setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    mut rng: ResMut<GlobalEntropy<ChaCha8Rng>>,
 ) {
     // Camera
     commands.spawn((Camera2dBundle::default(), GameCamera));
@@ -27,7 +26,7 @@ pub fn camera_setup(
 pub fn move_player(
     keyboard_input: Res<Input<KeyCode>>,
     mut query: Query<&mut Transform, With<Player>>,
-    time_step: Res<FixedTime>,
+    time_step: Res<Time>,
 ) {
     let mut player_transform = query.single_mut();
     let mut direction = Vec3::new(0.0, 0.0, 0.0);
@@ -45,7 +44,7 @@ pub fn move_player(
     }
 
     player_transform.translation =
-        player_transform.translation + (direction * 100.0 * time_step.period.as_secs_f32());
+        player_transform.translation + (direction * 100.0 * time_step.delta_seconds());
 }
 
 pub fn camera_chase(
