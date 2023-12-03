@@ -141,54 +141,71 @@ fn mouse_button_input(
 
     // calculate the position of the cursor in tile map coords
     let cursor_map_pos = world_pos_to_two_d_index(cursor_pos.0);
-    let mut tile_color = NORMAL_COLOR;
-    let mut tile_index = NORMAL_TILE_INDEX;
+
+    let mut new_tile_state = false;
+    let mut new_tile_color = NORMAL_COLOR;
+    let mut new_tile_index = NORMAL_TILE_INDEX;
+
+    let display_tile_color: Vec4;
+    let mut display_tile_index = NORMAL_TILE_INDEX;
+
     if buttons.pressed(MouseButton::Left) {
-        // the user commanded us to set a building so always change to color to building
-        tilemap.set(
-            &mut commands,
-            cursor_map_pos,
-            &TileBuilder::new(BUILDING_TILE_INDEX).with_color(BUILDING_COLOR),
-        );
+        new_tile_color = BUILDING_COLOR;
+        display_tile_color = BUILDING_COLOR;
+        new_tile_index = BUILDING_TILE_INDEX;
+        display_tile_index = BUILDING_TILE_INDEX;
+        new_tile_state = true;
+    } 
+    else {
+        display_tile_color = HOVER_COLOR;
+    }
 
-        // first check to see if we already have an tile to use
-        for (entity, tile_pos, mut tile_color, mut tile_index) in tile_q.iter_mut() {
-            if tile_pos.0 == cursor_map_pos {
+    tilemap.set(
+        &mut commands,
+        cursor_map_pos,
+        &TileBuilder::new(display_tile_index).with_color(display_tile_color),
+    );
+
+    // first check to see if we already have an tile to use
+    for (entity, tile_pos, mut tile_color, mut tile_index) in tile_q.iter_mut() {
+        if tile_pos.0 == cursor_map_pos {
+            if buttons.pressed(MouseButton::Left)
+            {
                 commands.entity(entity).insert(Building);
-                tile_color.0 = BUILDING_COLOR;
-                tile_index.0 = BUILDING_TILE_INDEX;
-                return;
             }
-        }
+            else
+            {
+                commands.entity(entity).insert(HoveredTile);
+            }
+            
+            if new_tile_state {
+                tile_color.0 = new_tile_color;
+                tile_index.0 = new_tile_index;
+            }
 
-        // if we got here then we didn't have an empty tile so we have to spawn one
+            return;
+        }
+    }
+
+    // if we got here then we didn't have a tile already so we have to spawn one
+    if buttons.pressed(MouseButton::Left)
+    {
         commands.spawn((
             Building, 
             MapPos(cursor_map_pos),
-            TileColor(BUILDING_COLOR),
-            TileIndex(BUILDING_TILE_INDEX)
+            TileColor(new_tile_color),
+            TileIndex(new_tile_index)
         ));
     }
-    else {
-        tilemap.set(
-            &mut commands,
-            cursor_map_pos,
-            &TileBuilder::new(1).with_color(HOVER_COLOR),
-        );
-
-        // first check to see if we already have an tile to use
-        for (entity, tile_pos, mut tile_color, mut tile_index) in tile_q.iter() {
-            if tile_pos.0 == cursor_map_pos {
-                commands.entity(entity).insert(HoveredTile);
-                return;
-            }
-        }
-
+    else
+    {
         commands.spawn((
             HoveredTile, 
             MapPos(cursor_map_pos),
-            TileColor(NORMAL_COLOR),
-            TileIndex(NORMAL_TILE_INDEX)
+            TileColor(new_tile_color),
+            TileIndex(new_tile_index)
         ));
     }
+
+
 }
