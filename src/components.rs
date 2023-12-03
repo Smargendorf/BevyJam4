@@ -12,16 +12,18 @@ pub struct Ant {
     pub vision_range: f32,
     pub vision_arc: f32, // in radians
     pub time_until_poop: f32,
+    pub secret_desire: Vec2,
 }
 
 impl Default for Ant {
     fn default() -> Self {
         Ant {
             state: AntState::Wandering,
-            speed: 1.0,
+            speed: 50.0,
             vision_range: 1.0,
             vision_arc: 2.0,
             time_until_poop: ANT_POOP_INTERVAL,
+            secret_desire: Vec2::ZERO,
         }
     }
 }

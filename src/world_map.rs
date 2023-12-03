@@ -25,29 +25,24 @@ pub struct WorldMapPlugin;
 impl Plugin for WorldMapPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CursorPos>()
-        .add_plugins(EntiTilesPlugin)
-        .add_systems(Startup, setup)
-        .add_systems(First, update_cursor_pos);
+            .add_plugins(EntiTilesPlugin)
+            .add_systems(Startup, setup)
+            .add_systems(First, update_cursor_pos);
     }
 }
 
 fn setup(mut commands: Commands, assets_server: Res<AssetServer>) {
-    let (tilemap_entity, mut tilemap) = TilemapBuilder::new(
-        TileType::Square,
-        MAP_SIZE,
-        TILE_SIZE,
-    )
-    .with_texture(
-        assets_server.load("test_square.png"),
-        TilemapTextureDescriptor::from_full_grid(
-            UVec2 { x: 32, y: 32 },
-            UVec2 { x: 2, y: 2 },
-            FilterMode::Nearest,
-        ),
-    )
-    .build(&mut commands);
+    let (tilemap_entity, mut tilemap) = TilemapBuilder::new(TileType::Square, MAP_SIZE, TILE_SIZE)
+        .with_texture(
+            assets_server.load("test_square.png"),
+            TilemapTextureDescriptor::from_full_grid(
+                UVec2 { x: 32, y: 32 },
+                UVec2 { x: 2, y: 2 },
+                FilterMode::Nearest,
+            ),
+        )
+        .build(&mut commands);
 
-    
     tilemap.fill_rect(
         &mut commands,
         FillArea::full(&tilemap),
@@ -89,8 +84,7 @@ impl Default for CursorPos {
     }
 }
 
-fn TwoDIndexToOneDIndex(index: UVec2) -> usize
-{
+fn TwoDIndexToOneDIndex(index: UVec2) -> usize {
     let linear_index = (index.y * MAP_SIZE.x + index.x) as usize;
     return linear_index;
 }
@@ -99,7 +93,7 @@ fn TwoDIndexToOneDIndex(index: UVec2) -> usize
 pub fn update_cursor_pos(
     camera_q: Query<(&GlobalTransform, &Camera)>,
     mut cursor_moved_events: EventReader<CursorMoved>,
-    mut cursor_pos: ResMut<CursorPos>
+    mut cursor_pos: ResMut<CursorPos>,
 ) {
     for cursor_moved in cursor_moved_events.iter() {
         // To get the mouse's world position, we have to transform its window position by
@@ -108,18 +102,15 @@ pub fn update_cursor_pos(
         for (cam_t, cam) in camera_q.iter() {
             if let Some(pos) = cam.viewport_to_world_2d(cam_t, cursor_moved.position) {
                 *cursor_pos = CursorPos(pos);
-                eprintln!("{}", cursor_pos.0);
-                eprintln!("{}", UVec2::new(cursor_pos.0.x as u32, cursor_pos.0.y as u32));
-                eprintln!("{}", TwoDIndexToOneDIndex(UVec2::new(cursor_pos.0.x as u32, cursor_pos.0.y as u32)));
+                // eprintln!("{}", cursor_pos.0);
+                // eprintln!("{}", UVec2::new(cursor_pos.0.x as u32, cursor_pos.0.y as u32));
+                // eprintln!("{}", TwoDIndexToOneDIndex(UVec2::new(cursor_pos.0.x as u32, cursor_pos.0.y as u32)));
             }
         }
     }
 }
 
-fn mouse_button_input(
-    mut tilemap_q: Query<&mut Tilemap>
-)
-{
+fn mouse_button_input(mut tilemap_q: Query<&mut Tilemap>) {
     //let mut tilemap = tilemap_q.single_mut();
     //tilemap.tiles;
 }
@@ -157,11 +148,10 @@ fn mouse_button_input(
 // //                     //tile_entity.
 // //                     //tile_entity.get_mut::<Position>().unwrap();
 // //                     commands.entity(tile_entity).add(|w:&mut EntityWorldMut| {
-                        
+
 // //                     });
 // //                 }
 // //             }
 // //         }
 // //     }
 // // }
-

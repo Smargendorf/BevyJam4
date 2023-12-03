@@ -1,6 +1,6 @@
 use crate::*;
-use bevy::math::*;
-use std::f32::consts::TAU;
+use bevy::{ecs::system::Despawn, math::*};
+use std::f32::consts::{PI, TAU};
 
 // TODO: Does each ant need to be able to identify its own "home this way" pheromone?
 #[derive(Clone, Copy)]
@@ -32,24 +32,34 @@ pub struct PheromoneBundle {
 
 #[derive(Bundle)]
 pub struct AntBundle {
-    ant: Ant,
-    transform: Transform,
+    pub ant: Ant,
+    pub transform: Transform,
+    pub rng: EntropyComponent<ChaCha8Rng>,
 }
 
-const PHEROMONE_DECAY_FACTOR: f32 = 1.0;
+const PHEROMONE_DECAY_FACTOR: f32 = 0.1;
 
-pub fn decay_pheromones(mut pheromones: Query<&mut Pheromone>, time: Res<Time>) {
-    for mut pheromone in pheromones.iter_mut() {
+pub fn decay_pheromones(
+    mut commands: Commands,
+    mut pheromones: Query<(Entity, &mut Pheromone)>,
+    time: Res<Time>,
+) {
+    for (entity, mut pheromone) in pheromones.iter_mut() {
         pheromone.intensity -= time.delta_seconds() * PHEROMONE_DECAY_FACTOR;
+
+        if pheromone.intensity < 0.0 {
+            commands.add(Despawn { entity })
+        }
     }
 }
 
 // bounds can exceed [0, tau] range - this is how "which side of the circle are we on?" can be
 // answered
 fn angle_within_bounds(theta: f32, bound_lower: f32, bound_upper: f32) -> bool {
-    (theta >= bound_lower && theta <= bound_upper)
-        || (theta >= bound_lower + TAU && theta <= bound_upper + TAU)
-        || (theta >= bound_lower - TAU && theta <= bound_upper - TAU)
+    !theta.is_nan()
+        && ((theta >= bound_lower && theta <= bound_upper)
+            || (theta >= bound_lower + TAU && theta <= bound_upper + TAU)
+            || (theta >= bound_lower - TAU && theta <= bound_upper - TAU))
 }
 
 fn ant_should_follow(ant_state: AntState, pher_kind: PheromoneKind) -> bool {
@@ -61,9 +71,12 @@ fn ant_should_follow(ant_state: AntState, pher_kind: PheromoneKind) -> bool {
     }
 }
 
+const RANDOM_WALK_FACTOR: f32 = 0.3;
+
 fn ant_desired_direction(
-    ant: &Ant,
+    ant: &mut Ant,
     ant_trans: &Transform,
+    rng: &mut EntropyComponent<ChaCha8Rng>,
     pheromones: &Query<(&Transform, &Pheromone), Without<Ant>>,
 ) -> Vec2 {
     let (ant_dir, _, _) = ant_trans.rotation.to_euler(EulerRot::ZXY);
@@ -71,7 +84,14 @@ fn ant_desired_direction(
     let vision_bound_lower = ant_dir + ant.vision_arc / 2.0;
     let vision_bound_upper = ant_dir - ant.vision_arc / 2.0;
 
-    let mut cum_dir = Vec2::ZERO;
+    let angle_offset = rand_uniform_f32(rng) * PI;
+    let length_offset = rand_uniform_f32(rng) + 1.0 / 2.0 * RANDOM_WALK_FACTOR;
+    let random_offset =
+        (Quat::from_euler(EulerRot::ZYX, angle_offset, 0.0, 0.0) * (Vec3::X * length_offset)).xy();
+
+    ant.secret_desire += random_offset;
+
+    let mut cum_dir = ant.secret_desire;
     for (pher_trans, pheromone) in pheromones.iter() {
         if !ant_should_follow(ant.state, pheromone.kind) {
             continue;
@@ -89,38 +109,54 @@ fn ant_desired_direction(
             continue;
         }
 
-        // TODO: Maybe intensity shouldn't cause following to fall off?
-        cum_dir += to_pher.normalize() * pheromone.intensity;
+        cum_dir += to_pher.normalize();
     }
 
     // Keep along the same path
-    if cum_dir == Vec2::ZERO {
-        cum_dir = (ant_trans.rotation * Vec3::X).xy();
+    if cum_dir.length() < 1e-3 {
+        cum_dir = (ant_trans.rotation * Vec3::Y).xy();
     }
 
-    // TODO apply some random wandering to the ant's chosen direction
+    // Can happen if rotation has not yet been set
+    if cum_dir.length() < 1e-3 {
+        cum_dir = Vec2::X;
+    }
+
     cum_dir.normalize()
 }
 
 pub fn update_ant_movement(
-    mut ants: Query<(&mut Transform, &Ant), Without<Pheromone>>,
+    mut ants: Query<
+        (&mut Transform, &mut Ant, &mut EntropyComponent<ChaCha8Rng>),
+        Without<Pheromone>,
+    >,
     pheromones: Query<(&Transform, &Pheromone), Without<Ant>>,
     time: Res<Time>,
 ) {
-    for (mut ant_trans, ant) in ants.iter_mut() {
-        let chosen_dir = Vec3::from((ant_desired_direction(&ant, &ant_trans, &pheromones), 0.0));
+    for (mut ant_trans, mut ant, mut rng) in ants.iter_mut() {
+        let pher_dir = Vec3::from((
+            ant_desired_direction(&mut ant, &ant_trans, &mut rng, &pheromones),
+            0.0,
+        ));
+
+        // TODO: there has to be a better way...
+        let angle_offset = (rng.next_u32() & 0xffff) as f32 / (0xffff as f32) * ant.vision_arc
+            - ant.vision_arc / 2.0;
+        let rand_rot = Quat::from_euler(EulerRot::ZXY, angle_offset * 0.1, 0.0, 0.0);
+
+        let chosen_dir = (rand_rot * pher_dir).normalize();
+
         let new_position = ant_trans.translation + chosen_dir * ant.speed * time.delta_seconds();
 
         // Do these *before* moving
         ant_trans.rotation = ant_trans.looking_at(new_position, Vec3::Z).rotation;
-        ant_trans.translation = Vec3::new(new_position.x, new_position.y, ant_trans.translation.z)
+        ant_trans.translation = new_position;
 
         // TODO change ant state based on findings
-        // TODO make ants drop pheromones
     }
 }
 
-pub const ANT_POOP_INTERVAL: f32 = 0.5;
+pub const ANT_POOP_INTERVAL: f32 = 0.2;
 
 pub fn spawn_pheromones(
     mut commands: Commands,
@@ -134,12 +170,40 @@ pub fn spawn_pheromones(
             commands.spawn(PheromoneBundle {
                 pheromone: Pheromone {
                     kind: ant.state.pher_to_drop(),
-                    intensity: 10.0,
+                    intensity: 1.0,
                 },
                 transform: ant_trans.clone(),
             });
 
             ant.time_until_poop = ANT_POOP_INTERVAL;
         }
+    }
+}
+
+pub fn debug_ants(ants: Query<(&Ant, &Transform)>, mut gizmos: Gizmos) {
+    for (_ant, ant_trans) in ants.iter() {
+        let facing = ant_trans.rotation * Vec3::Y * 2.0;
+
+        let start = ant_trans.translation - facing;
+        let end = ant_trans.translation + facing;
+
+        gizmos.line_2d(start.xy(), end.xy(), Color::BLUE);
+        gizmos
+            .circle_2d(ant_trans.translation.xy(), 5.0, Color::BLUE)
+            .segments(16);
+    }
+
+    gizmos.line_2d(Vec2::new(0.0, 0.0), Vec2::new(300.0, 300.0), Color::RED);
+}
+
+pub fn debug_phers(phers: Query<(&Pheromone, &Transform)>, mut gizmos: Gizmos) {
+    for (pher, pher_trans) in phers.iter() {
+        gizmos
+            .circle_2d(
+                pher_trans.translation.xy(),
+                1.0,
+                Color::GREEN * pher.intensity,
+            )
+            .segments(16);
     }
 }

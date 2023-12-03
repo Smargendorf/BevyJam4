@@ -12,11 +12,13 @@ mod camera;
 mod components;
 mod resources;
 mod sprite;
+mod util;
 mod world_map;
 
 use camera::*;
 use components::*;
 use resources::Food;
+use util::*;
 
 const BACKGROUND_COLOR: Color = Color::rgb(0.1, 0.1, 0.1);
 const PLAYER_COLOR: Color = Color::rgb(1.0, 0.5, 0.5);
@@ -46,23 +48,19 @@ fn setup(
         Player,
     ));
 
-    for _ in 0..10 {
+    for _ in 0..32 {
         let transform = Transform::from_translation(Vec3::new(
             (rng.next_u32() as i32 % 500) as f32,
-            (rng.next_u32() as i32 % 500) as f32,
+            (rng.next_u32() as i32 % 300) as f32,
             1.0,
         ))
         .with_scale(ANT_SIZE);
 
-        commands.spawn((
-            MaterialMesh2dBundle {
-                mesh: meshes.add(shape::Circle::default().into()).into(),
-                material: materials.add(ColorMaterial::from(ANT_COLOR)),
-                transform: transform,
-                ..default()
-            },
-            Ant::default(),
-        ));
+        commands.spawn(behavior::AntBundle {
+            ant: Ant::default(),
+            transform,
+            rng: rng.fork_rng(),
+        });
     }
 }
 
@@ -77,8 +75,16 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(Update, bevy::window::close_on_esc)
         .add_systems(
-            Update,
+            FixedUpdate,
             (behavior::update_ant_movement, behavior::spawn_pheromones),
+        )
+        .add_systems(
+            Update,
+            (
+                behavior::debug_ants,
+                behavior::debug_phers,
+                behavior::decay_pheromones,
+            ),
         )
         .add_event::<MouseWheel>()
         .run();
