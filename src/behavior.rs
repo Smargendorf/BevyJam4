@@ -72,14 +72,17 @@ fn ant_should_follow(ant_state: AntState, pher_kind: PheromoneKind) -> bool {
 }
 
 const RANDOM_WALK_FACTOR: f32 = 0.3;
+const FOOD_HINT_THRESHOLD: f32 = 50.0;
+const HINT_FACTOR: f32 = 0.5;
 
 fn ant_desired_direction(
     ant: &mut Ant,
     ant_trans: &Transform,
     rng: &mut EntropyComponent<ChaCha8Rng>,
+    food: &Query<&Transform, (With<Food>, Without<Ant>, Without<Pheromone>)>,
     pheromones: &Query<(&Transform, &Pheromone), (Without<Ant>, Without<Food>)>,
 ) -> Vec2 {
-    let dir_vec = (ant_trans.rotation * Vec3::Y).xy();
+    let dir_vec = ant_trans.forward().xy();
     let ant_dir = (f32::atan2(dir_vec.y, dir_vec.x) + TAU) % TAU;
 
     let vision_bound_lower = ant_dir - ant.vision_arc / 2.0;
@@ -90,7 +93,9 @@ fn ant_desired_direction(
     let random_offset =
         (Quat::from_euler(EulerRot::ZYX, angle_offset, 0.0, 0.0) * (Vec3::X * length_offset)).xy();
 
-    ant.secret_desire += random_offset;
+    ant.secret_desire += random_offset * 0.5;
+
+    // attractive force from pheromones
 
     let mut cum_dir = ant.secret_desire;
     for (pher_trans, pheromone) in pheromones.iter() {
@@ -110,7 +115,27 @@ fn ant_desired_direction(
             continue;
         }
 
-        cum_dir += to_pher.normalize() * 5.0;
+        cum_dir += to_pher.normalize();
+    }
+
+    cum_dir = cum_dir.normalize();
+
+    // attractive force from food/home
+
+    match ant.state {
+        AntState::Wandering => {
+            for food in food.iter() {
+                let to_food = (food.translation - ant_trans.translation).xy();
+
+                if to_food.length() < FOOD_HINT_THRESHOLD {
+                    cum_dir += to_food.normalize() * HINT_FACTOR;
+                }
+            }
+        }
+        AntState::HasFood => {
+            let to_home = -ant_trans.translation.xy();
+            cum_dir += to_home.normalize() * HINT_FACTOR;
+        }
     }
 
     // Keep along the same path
@@ -127,6 +152,7 @@ fn ant_desired_direction(
 }
 
 const DETECTION_RADIUS: f32 = 20.0;
+const MOMENTUM_WEIGHT: f32 = 1.0;
 
 pub fn update_ant_movement(
     mut ants: Query<
@@ -151,16 +177,24 @@ pub fn update_ant_movement(
             AntState::HasFood => {
                 if ant_trans.translation.length() < DETECTION_RADIUS {
                     ant.state = AntState::Wandering;
+                    ant.secret_desire *= -1.0;
+                    ant_trans.rotation *= Quat::from_euler(EulerRot::ZXY, PI, 0.0, 0.0);
                 }
             }
         }
 
         let chosen_dir = Vec3::from((
-            ant_desired_direction(&mut ant, &ant_trans, &mut rng, &pheromones),
+            ant_desired_direction(&mut ant, &ant_trans, &mut rng, &food, &pheromones),
             0.0,
         ));
 
-        let mut actual_offset = chosen_dir * ant.speed * time.delta_seconds();
+        ant.secret_desire = chosen_dir.xy();
+
+        let momentum_dir = ant_trans.forward().normalize();
+
+        let mut actual_offset = (chosen_dir + momentum_dir * MOMENTUM_WEIGHT).normalize()
+            * ant.speed
+            * time.delta_seconds();
 
         let potential_position = ant_trans.translation + actual_offset;
 
@@ -181,7 +215,7 @@ pub fn update_ant_movement(
     }
 }
 
-pub const ANT_POOP_INTERVAL: f32 = 2.0;
+pub const ANT_POOP_INTERVAL: f32 = 5.0;
 
 pub fn spawn_pheromones(
     mut commands: Commands,
@@ -206,15 +240,15 @@ pub fn spawn_pheromones(
 }
 
 pub fn debug_ants(ants: Query<(&Ant, &Transform)>, mut gizmos: Gizmos) {
-    for (_ant, ant_trans) in ants.iter() {
-        let facing = ant_trans.rotation * Vec3::Y * 2.0;
+    for (ant, ant_trans) in ants.iter() {
+        let facing = ant.secret_desire;
 
-        let start = ant_trans.translation - facing;
-        let end = ant_trans.translation + facing;
+        let start = ant_trans.translation.xy();
+        let end = ant_trans.translation.xy() + facing.normalize() * ant.vision_range;
 
         gizmos.line_2d(start.xy(), end.xy(), Color::WHITE);
         gizmos
-            .circle_2d(ant_trans.translation.xy(), 5.0, Color::WHITE)
+            .circle_2d(ant_trans.translation.xy(), ant.vision_range, Color::WHITE)
             .segments(16);
     }
 }

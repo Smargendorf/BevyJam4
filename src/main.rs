@@ -67,7 +67,7 @@ fn setup(
         ));
     }
 
-    for _ in 0..200 {
+    for _ in 0..100 {
         commands.spawn(behavior::AntBundle {
             ant: Ant::default(),
             transform: Transform::default(),
