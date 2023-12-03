@@ -28,13 +28,18 @@ const HOVER_COLOR: Vec4 = Vec4::new(0., 0., 0., 0.1);
 const NORMAL_COLOR: Vec4 = Vec4::new(1., 1., 1., 1.);
 const NORMAL_TILE_INDEX: u32 = 1;
 
-
-
 #[derive(Component)]
 pub struct HoveredTile;
 
+enum BuildingType
+{
+    Tunnel,
+    QueenChamber,
+    FoodStorage
+}
+
 #[derive(Component)]
-pub struct Building;
+pub struct Building(BuildingType);
 
 #[derive(Component)]
 pub struct TileColor(Vec4);
@@ -171,7 +176,7 @@ fn mouse_button_input(
         if tile_pos.0 == cursor_map_pos {
             if buttons.pressed(MouseButton::Left)
             {
-                commands.entity(entity).insert(Building);
+                commands.entity(entity).insert(Building(BuildingType::Tunnel));
             }
             else
             {
@@ -191,7 +196,7 @@ fn mouse_button_input(
     if buttons.pressed(MouseButton::Left)
     {
         commands.spawn((
-            Building, 
+            Building(BuildingType::Tunnel), 
             MapPos(cursor_map_pos),
             TileColor(new_tile_color),
             TileIndex(new_tile_index)
