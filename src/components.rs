@@ -20,7 +20,7 @@ impl Default for Ant {
         Ant {
             state: AntState::Wandering,
             speed: 50.0,
-            vision_range: 1.0,
+            vision_range: 2.0,
             vision_arc: 2.0,
             time_until_poop: ANT_POOP_INTERVAL,
             secret_desire: Vec2::ZERO,
@@ -36,3 +36,6 @@ pub struct Pheromone {
     pub kind: PheromoneKind,
     pub intensity: f32,
 }
+
+#[derive(Component)]
+pub struct Food;

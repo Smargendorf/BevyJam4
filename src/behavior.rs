@@ -77,12 +77,13 @@ fn ant_desired_direction(
     ant: &mut Ant,
     ant_trans: &Transform,
     rng: &mut EntropyComponent<ChaCha8Rng>,
-    pheromones: &Query<(&Transform, &Pheromone), Without<Ant>>,
+    pheromones: &Query<(&Transform, &Pheromone), (Without<Ant>, Without<Food>)>,
 ) -> Vec2 {
-    let (ant_dir, _, _) = ant_trans.rotation.to_euler(EulerRot::ZXY);
+    let dir_vec = (ant_trans.rotation * Vec3::Y).xy();
+    let ant_dir = (f32::atan2(dir_vec.y, dir_vec.x) + TAU) % TAU;
 
-    let vision_bound_lower = ant_dir + ant.vision_arc / 2.0;
-    let vision_bound_upper = ant_dir - ant.vision_arc / 2.0;
+    let vision_bound_lower = ant_dir - ant.vision_arc / 2.0;
+    let vision_bound_upper = ant_dir + ant.vision_arc / 2.0;
 
     let angle_offset = rand_uniform_f32(rng) * PI;
     let length_offset = rand_uniform_f32(rng) + 1.0 / 2.0 * RANDOM_WALK_FACTOR;
@@ -103,13 +104,13 @@ fn ant_desired_direction(
             continue;
         }
 
-        let angle = f32::atan2(to_pher.y, to_pher.x);
+        let angle = (f32::atan2(to_pher.y, to_pher.x) + TAU) % TAU;
 
         if !angle_within_bounds(angle, vision_bound_lower, vision_bound_upper) {
             continue;
         }
 
-        cum_dir += to_pher.normalize();
+        cum_dir += to_pher.normalize() * 5.0;
     }
 
     // Keep along the same path
@@ -125,38 +126,62 @@ fn ant_desired_direction(
     cum_dir.normalize()
 }
 
+const DETECTION_RADIUS: f32 = 20.0;
+
 pub fn update_ant_movement(
     mut ants: Query<
         (&mut Transform, &mut Ant, &mut EntropyComponent<ChaCha8Rng>),
-        Without<Pheromone>,
+        (Without<Food>, Without<Pheromone>),
     >,
-    pheromones: Query<(&Transform, &Pheromone), Without<Ant>>,
+    pheromones: Query<(&Transform, &Pheromone), (Without<Ant>, Without<Food>)>,
+    food: Query<&Transform, (With<Food>, Without<Ant>, Without<Pheromone>)>,
     time: Res<Time>,
 ) {
     for (mut ant_trans, mut ant, mut rng) in ants.iter_mut() {
-        let pher_dir = Vec3::from((
+        match ant.state {
+            AntState::Wandering => {
+                for food in food.iter() {
+                    if (ant_trans.translation - food.translation).length() <= DETECTION_RADIUS {
+                        ant.state = AntState::HasFood;
+                        ant.secret_desire *= -1.0;
+                        ant_trans.rotation *= Quat::from_euler(EulerRot::ZXY, PI, 0.0, 0.0);
+                    }
+                }
+            }
+            AntState::HasFood => {
+                if ant_trans.translation.length() < DETECTION_RADIUS {
+                    ant.state = AntState::Wandering;
+                }
+            }
+        }
+
+        let chosen_dir = Vec3::from((
             ant_desired_direction(&mut ant, &ant_trans, &mut rng, &pheromones),
             0.0,
         ));
 
-        // TODO: there has to be a better way...
-        let angle_offset = (rng.next_u32() & 0xffff) as f32 / (0xffff as f32) * ant.vision_arc
-            - ant.vision_arc / 2.0;
-        let rand_rot = Quat::from_euler(EulerRot::ZXY, angle_offset * 0.1, 0.0, 0.0);
+        let mut actual_offset = chosen_dir * ant.speed * time.delta_seconds();
 
-        let chosen_dir = (rand_rot * pher_dir).normalize();
+        let potential_position = ant_trans.translation + actual_offset;
 
-        let new_position = ant_trans.translation + chosen_dir * ant.speed * time.delta_seconds();
+        if potential_position.x > 500.0 || potential_position.x < -500.0 {
+            actual_offset.x *= -1.0;
+            ant.secret_desire.x *= -1.0;
+        }
+        if potential_position.y > 300.0 || potential_position.y < -300.0 {
+            actual_offset.y *= -1.0;
+            ant.secret_desire.y *= -1.0;
+        }
 
         // Do these *before* moving
-        ant_trans.rotation = ant_trans.looking_at(new_position, Vec3::Z).rotation;
-        ant_trans.translation = new_position;
+        ant_trans.rotation = ant_trans.looking_at(potential_position, Vec3::Z).rotation;
+        ant_trans.translation += actual_offset;
 
         // TODO change ant state based on findings
     }
 }
 
-pub const ANT_POOP_INTERVAL: f32 = 0.2;
+pub const ANT_POOP_INTERVAL: f32 = 2.0;
 
 pub fn spawn_pheromones(
     mut commands: Commands,
@@ -187,13 +212,11 @@ pub fn debug_ants(ants: Query<(&Ant, &Transform)>, mut gizmos: Gizmos) {
         let start = ant_trans.translation - facing;
         let end = ant_trans.translation + facing;
 
-        gizmos.line_2d(start.xy(), end.xy(), Color::BLUE);
+        gizmos.line_2d(start.xy(), end.xy(), Color::WHITE);
         gizmos
-            .circle_2d(ant_trans.translation.xy(), 5.0, Color::BLUE)
+            .circle_2d(ant_trans.translation.xy(), 5.0, Color::WHITE)
             .segments(16);
     }
-
-    gizmos.line_2d(Vec2::new(0.0, 0.0), Vec2::new(300.0, 300.0), Color::RED);
 }
 
 pub fn debug_phers(phers: Query<(&Pheromone, &Transform)>, mut gizmos: Gizmos) {
@@ -202,8 +225,11 @@ pub fn debug_phers(phers: Query<(&Pheromone, &Transform)>, mut gizmos: Gizmos) {
             .circle_2d(
                 pher_trans.translation.xy(),
                 1.0,
-                Color::GREEN * pher.intensity,
+                match pher.kind {
+                    PheromoneKind::HomeThisWay => Color::BLUE,
+                    PheromoneKind::FoodThisWay => Color::GREEN,
+                } * pher.intensity,
             )
-            .segments(16);
+            .segments(8);
     }
 }

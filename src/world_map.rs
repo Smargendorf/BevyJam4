@@ -94,7 +94,7 @@ fn mouse_button_input(
 ) {
     let mut tilemap = tilemap_q.single_mut();
 
-    eprintln!("{}", world_pos_to_two_d_index(cursor_pos.0));
+    // eprintln!("{}", world_pos_to_two_d_index(cursor_pos.0));
     if buttons.pressed(MouseButton::Left) {
         tilemap.set(
             &mut commands,
