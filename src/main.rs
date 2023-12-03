@@ -1,7 +1,8 @@
 use bevy::input::mouse::MouseWheel;
 use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
 
-use bevy_ecs_tilemap::prelude::*;
+use bevy_entitiles::EntiTilesPlugin;
+
 use bevy_prng::ChaCha8Rng;
 use bevy_rand::prelude::*;
 use rand_core::RngCore;
@@ -69,6 +70,7 @@ fn main() {
     .add_plugins(DefaultPlugins)
     .add_plugins(EntropyPlugin::<ChaCha8Rng>::default())
     .add_plugins(camera::CameraPlugin)
+    .add_plugins(world_map::WorldMapPlugin)
     .insert_resource(ClearColor(BACKGROUND_COLOR))
     .add_systems(Startup, (setup))
     .add_systems(Update, bevy::window::close_on_esc)
