@@ -22,7 +22,7 @@ pub const TILE_SIZE: Vec2 = Vec2::new(16., 16.);
 pub const MAP_SIZE: UVec2 = UVec2::new(100, 100);
 
 pub fn world_map_size() -> Vec2 {
-    return TILE_SIZE*(MAP_SIZE.as_vec2());
+    return TILE_SIZE * (MAP_SIZE.as_vec2());
 }
 
 pub fn world_map_center() -> Vec2 {
@@ -68,10 +68,9 @@ pub struct SelectedBuilding {
 pub struct Building(BuildingType);
 
 #[derive(Component)]
-pub struct ZLevel
-{
+pub struct ZLevel {
     z_level: u32,
-    buildings: Vec<BuildingType>
+    buildings: Vec<BuildingType>,
 }
 
 #[derive(Component)]
@@ -126,10 +125,13 @@ fn setup(mut commands: Commands, assets_server: Res<AssetServer>) {
     commands.spawn(SelectedZLevel(0));
 
     let mut buildings = Vec::new();
-    buildings.resize(MAP_SIZE.x as usize * MAP_SIZE.y as usize, BuildingType::None);
-    commands.spawn(ZLevel{
+    buildings.resize(
+        MAP_SIZE.x as usize * MAP_SIZE.y as usize,
+        BuildingType::None,
+    );
+    commands.spawn(ZLevel {
         z_level: 0,
-        buildings: buildings
+        buildings: buildings,
     });
 
     commands.spawn(BuildingTypeToColorMap(HashMap::from([
@@ -151,10 +153,7 @@ impl Default for CursorPos {
 }
 
 fn world_pos_to_two_d_index(pos: Vec2) -> UVec2 {
-    return UVec2::new(
-        (pos.x / TILE_SIZE.x) as u32,
-        (pos.y / TILE_SIZE.y) as u32,
-    );
+    return UVec2::new((pos.x / TILE_SIZE.x) as u32, (pos.y / TILE_SIZE.y) as u32);
 }
 
 // We need to keep the cursor position updated based on any `CursorMoved` events.
@@ -193,15 +192,17 @@ fn reset_hovered_tiles(
         }
 
         for (entity, hovered_tile_pos) in hovered_tiles_q.iter() {
-            let building_type = z_level.buildings[two_d_index_to_one_d_index(hovered_tile_pos.0.xy())];
-            let color = building_color_map.0.get(&building_type).unwrap();
-            tilemap.set(
-                &mut commands,
-                hovered_tile_pos.0.xy(),
-                &TileBuilder::new(0).with_color(*color),
-            );
-    
-            commands.entity(entity).despawn();
+            if let Some(tilemap_index) = two_d_index_to_one_d_index(hovered_tile_pos.0.xy()) {
+                let building_type = z_level.buildings[tilemap_index];
+                let color = building_color_map.0.get(&building_type).unwrap();
+                tilemap.set(
+                    &mut commands,
+                    hovered_tile_pos.0.xy(),
+                    &TileBuilder::new(0).with_color(*color),
+                );
+
+                commands.entity(entity).despawn();
+            }
         }
         break;
     }
@@ -225,10 +226,7 @@ fn mouse_hover(
         &TileBuilder::new(NORMAL_TILE_INDEX).with_color(HOVER_COLOR),
     );
 
-    commands.spawn((
-        HoveredTile,
-        MapPos(cursor_map_pos)
-    ));
+    commands.spawn((HoveredTile, MapPos(cursor_map_pos)));
 }
 
 fn mouse_building(
@@ -250,7 +248,11 @@ fn mouse_building(
 
     let selected_building: &SelectedBuilding = selected_building_q.single();
     let building_color_map = building_type_color_map_q.single();
-    let new_tile_color: Vec4 = building_color_map.0.get(&selected_building.selected_type).cloned().unwrap();
+    let new_tile_color: Vec4 = building_color_map
+        .0
+        .get(&selected_building.selected_type)
+        .cloned()
+        .unwrap();
 
     let mut tilemap = tilemap_q.single_mut();
 
@@ -264,8 +266,10 @@ fn mouse_building(
         if z_level.z_level != selected_z_level.0 {
             continue;
         }
-        
-        z_level.buildings[two_d_index_to_one_d_index(cursor_map_pos.xy())] = selected_building.selected_type;
+
+        if let Some(index) = two_d_index_to_one_d_index(cursor_map_pos.xy()) {
+            z_level.buildings[index] = selected_building.selected_type;
+        }
     }
 }
 
@@ -283,14 +287,16 @@ fn change_selected_building_type(
     }
 }
 
-fn one_d_index_to_two_d_index(index: usize) -> UVec2
-{
+fn one_d_index_to_two_d_index(index: usize) -> UVec2 {
     return UVec2::new(index as u32 % MAP_SIZE.x, index as u32 / MAP_SIZE.x);
 }
 
-fn two_d_index_to_one_d_index(index: UVec2) -> usize
-{
-    return (index.y * MAP_SIZE.x + index.x) as usize;
+fn two_d_index_to_one_d_index(index: UVec2) -> Option<usize> {
+    if index.x < MAP_SIZE.x && index.y < MAP_SIZE.y {
+        Some((index.y * MAP_SIZE.x + index.x) as usize)
+    } else {
+        None
+    }
 }
 
 fn change_selected_z_level(
@@ -314,8 +320,7 @@ fn change_selected_z_level(
         }
 
         selected_z_level.0 -= 1;
-    }
-    else {
+    } else {
         // no change return early
         return;
     }
@@ -323,7 +328,7 @@ fn change_selected_z_level(
     eprint!("Z:{}", selected_z_level.0);
 
     // the zlevel changed so rerender the tile map
-    
+
     // first blank the whole tilemap
     let fill_area = FillArea::full(&tilemap);
     tilemap.fill_rect(&mut commands, fill_area, &TileBuilder::new(0));
@@ -352,10 +357,13 @@ fn change_selected_z_level(
     // if we didn't find an existing z layer make one
     if !found_z_layer {
         let mut buildings = Vec::new();
-        buildings.resize(MAP_SIZE.x as usize * MAP_SIZE.y as usize, BuildingType::None);
-        commands.spawn(ZLevel{
+        buildings.resize(
+            MAP_SIZE.x as usize * MAP_SIZE.y as usize,
+            BuildingType::None,
+        );
+        commands.spawn(ZLevel {
             z_level: selected_z_level.0,
-            buildings: buildings
+            buildings: buildings,
         });
     }
 }
