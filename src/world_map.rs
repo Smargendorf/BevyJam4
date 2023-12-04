@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use bevy::{
     math::Vec4,
     prelude::{App, AssetServer, Camera2dBundle, Commands, Res, Startup, UVec2, Vec2},
@@ -21,6 +23,9 @@ const TILE_SIZE: Vec2 = Vec2::new(16., 16.);
 const MAP_SIZE: UVec2 = UVec2::new(100, 100);
 
 const BUILDING_COLOR: Vec4 = Vec4::new(0.8, 1., 0.8, 0.1);
+const TUNNEL_COLOR: Vec4 = Vec4::new(0.15, 0.1, 0., 1.);
+const QUEEN_CHAMBER_COLOR: Vec4 = Vec4::new(0.73, 0.12, 63., 1.);
+const FOOD_STORAGE_COLOR: Vec4 = Vec4::new(0.2, 0.73, 0.12, 1.);
 const BUILDING_TILE_INDEX: u32 = 1;
 
 const HOVER_COLOR: Vec4 = Vec4::new(0., 0., 0., 0.1);
@@ -31,11 +36,17 @@ const NORMAL_TILE_INDEX: u32 = 1;
 #[derive(Component)]
 pub struct HoveredTile;
 
+#[derive(PartialEq,Eq,Hash,Clone, Copy)]
 enum BuildingType
 {
     Tunnel,
     QueenChamber,
     FoodStorage
+}
+
+#[derive(Component)]
+pub struct SelectedBuilding {
+    selected_type: BuildingType
 }
 
 #[derive(Component)]
@@ -57,7 +68,7 @@ impl Plugin for WorldMapPlugin {
         app.init_resource::<CursorPos>()
             .add_plugins(EntiTilesPlugin)
             .add_systems(Startup, setup)
-            .add_systems(First, (update_cursor_pos, reset_hovered_tiles))
+            .add_systems(First, (update_cursor_pos, reset_hovered_tiles, change_selected_building_type))
             .add_systems(Update, mouse_button_input);
     }
 }
@@ -82,6 +93,10 @@ fn setup(mut commands: Commands, assets_server: Res<AssetServer>) {
     );
 
     commands.entity(tilemap_entity).insert(tilemap);
+
+    commands.spawn(SelectedBuilding {
+        selected_type: BuildingType::Tunnel
+    });
 }
 
 #[derive(Resource)]
@@ -122,8 +137,6 @@ fn reset_hovered_tiles(
     hovered_tiles_q: Query<(Entity, &MapPos, &TileColor, &TileIndex), With<HoveredTile>>
 ) {
     let mut tilemap = tilemap_q.single_mut();
-
-    // Handle resetting hovered tiles that that don't have buildings
     for (entity, hovered_tile_pos, tile_color, tile_index) in hovered_tiles_q.iter() {
         tilemap.set(
             &mut commands,
@@ -140,8 +153,16 @@ fn mouse_button_input(
     buttons: Res<Input<MouseButton>>,
     cursor_pos: Res<CursorPos>,
     mut tilemap_q: Query<&mut Tilemap>,
-    mut tile_q: Query<(Entity, &MapPos, &mut TileColor, &mut TileIndex)>,
+    mut tile_q: Query<(Entity, &MapPos, &mut TileColor, &mut TileIndex, Option<&mut Building>)>,
+    selected_building_q: Query<&mut SelectedBuilding>
 ) {
+    let selected_building = selected_building_q.single();
+    let mut building_type_to_tile_color = HashMap::from([
+        (BuildingType::Tunnel, TUNNEL_COLOR),
+        (BuildingType::QueenChamber, QUEEN_CHAMBER_COLOR),
+        (BuildingType::FoodStorage, FOOD_STORAGE_COLOR),
+    ]);
+
     let mut tilemap = tilemap_q.single_mut();
 
     // calculate the position of the cursor in tile map coords
@@ -155,8 +176,8 @@ fn mouse_button_input(
     let mut display_tile_index = NORMAL_TILE_INDEX;
 
     if buttons.pressed(MouseButton::Left) {
-        new_tile_color = BUILDING_COLOR;
-        display_tile_color = BUILDING_COLOR;
+        new_tile_color = *building_type_to_tile_color.entry(selected_building.selected_type).or_default();
+        display_tile_color = *building_type_to_tile_color.entry(selected_building.selected_type).or_default();
         new_tile_index = BUILDING_TILE_INDEX;
         display_tile_index = BUILDING_TILE_INDEX;
         new_tile_state = true;
@@ -172,11 +193,11 @@ fn mouse_button_input(
     );
 
     // first check to see if we already have an tile to use
-    for (entity, tile_pos, mut tile_color, mut tile_index) in tile_q.iter_mut() {
+    for (entity, tile_pos, mut tile_color, mut tile_index, _) in tile_q.iter_mut() {
         if tile_pos.0 == cursor_map_pos {
             if buttons.pressed(MouseButton::Left)
             {
-                commands.entity(entity).insert(Building(BuildingType::Tunnel));
+                commands.entity(entity).insert(Building(selected_building.selected_type));
             }
             else
             {
@@ -211,6 +232,20 @@ fn mouse_button_input(
             TileIndex(new_tile_index)
         ));
     }
+}
 
-
+pub fn change_selected_building_type(
+    keyboard_input: Res<Input<KeyCode>>,
+    mut selected_building_q: Query<&mut SelectedBuilding>
+) {
+    let mut selected_building = selected_building_q.single_mut();
+    if keyboard_input.pressed(KeyCode::Key1) {
+        selected_building.selected_type = BuildingType::Tunnel;
+    }
+    else if keyboard_input.pressed(KeyCode::Key2) {
+        selected_building.selected_type = BuildingType::FoodStorage;
+    }
+    else if keyboard_input.pressed(KeyCode::Key3) {
+        selected_building.selected_type = BuildingType::QueenChamber;
+    }
 }
