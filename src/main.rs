@@ -61,7 +61,7 @@ fn setup(
         ));
     }
 
-    for _ in 0..100 {
+    for _ in 0..1000 {
         commands.spawn(behavior::AntBundle {
             ant: Ant::default(),
             transform: Transform::default(),
@@ -82,14 +82,18 @@ fn main() {
         .add_systems(Update, bevy::window::close_on_esc)
         .add_systems(
             Update,
-            (behavior::update_ant_movement, behavior::spawn_pheromones),
+            (
+                behavior::update_ant_movement,
+                behavior::spawn_pheromones,
+                behavior::decay_pheromones,
+            ),
         )
         .add_systems(
             Update,
             (
-                behavior::debug_ants,
-                behavior::debug_phers,
-                behavior::decay_pheromones,
+                // behavior::debug_ants,
+                // behavior::debug_phers,
+                behavior::debug_ants_minimal
             ),
         )
         .add_event::<MouseWheel>()

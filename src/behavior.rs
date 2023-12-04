@@ -3,7 +3,7 @@ use bevy::{ecs::system::Despawn, math::*};
 use std::f32::consts::{PI, TAU};
 
 // TODO: Does each ant need to be able to identify its own "home this way" pheromone?
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub enum PheromoneKind {
     HomeThisWay,
     FoodThisWay,
@@ -115,7 +115,7 @@ fn ant_desired_direction(
             continue;
         }
 
-        cum_dir += to_pher.normalize();
+        cum_dir += to_pher.normalize() * pheromone.intensity;
     }
 
     cum_dir = cum_dir.normalize();
@@ -216,23 +216,51 @@ pub fn update_ant_movement(
 }
 
 pub const ANT_POOP_INTERVAL: f32 = 5.0;
+pub const PHER_PROX_DISTANCE: f32 = 5.0;
+pub const PHER_NUDGE_COEF: f32 = 0.3;
 
 pub fn spawn_pheromones(
     mut commands: Commands,
     mut ants: Query<(&Transform, &mut Ant), Without<Pheromone>>,
+    mut phers: Query<(&mut Transform, &mut Pheromone), Without<Ant>>,
     time: Res<Time>,
 ) {
     for (ant_trans, mut ant) in ants.iter_mut() {
         if ant.time_until_poop > 0.0 {
             ant.time_until_poop -= time.delta_seconds() * ant.speed;
         } else {
-            commands.spawn(PheromoneBundle {
-                pheromone: Pheromone {
-                    kind: ant.state.pher_to_drop(),
-                    intensity: 1.0,
-                },
-                transform: ant_trans.clone(),
-            });
+            let closest_neighbor = phers
+                .iter_mut()
+                .filter(|(trans, pher)| {
+                    pher.kind == ant.state.pher_to_drop()
+                        && (ant_trans.translation - trans.translation).length()
+                            <= PHER_PROX_DISTANCE
+                })
+                .reduce(|(t_closest, p_closest), (t_current, p_current)| {
+                    if (ant_trans.translation - t_closest.translation).length()
+                        > (ant_trans.translation - t_closest.translation).length()
+                    {
+                        (t_current, p_current)
+                    } else {
+                        (t_closest, p_closest)
+                    }
+                });
+
+            if let Some((mut pher_trans, mut pher)) = closest_neighbor {
+                let offset = ant_trans.translation - pher_trans.translation;
+                pher_trans.translation +=
+                    (1.0 - (pher.intensity / (pher.intensity + 1.0))) * offset * PHER_NUDGE_COEF;
+
+                pher.intensity += 1.0;
+            } else {
+                commands.spawn(PheromoneBundle {
+                    pheromone: Pheromone {
+                        kind: ant.state.pher_to_drop(),
+                        intensity: 1.0,
+                    },
+                    transform: ant_trans.clone(),
+                });
+            }
 
             ant.time_until_poop = ANT_POOP_INTERVAL;
         }
@@ -250,6 +278,17 @@ pub fn debug_ants(ants: Query<(&Ant, &Transform)>, mut gizmos: Gizmos) {
         gizmos
             .circle_2d(ant_trans.translation.xy(), ant.vision_range, Color::WHITE)
             .segments(16);
+    }
+}
+
+pub fn debug_ants_minimal(ants: Query<(&Ant, &Transform)>, mut gizmos: Gizmos) {
+    for (ant, ant_trans) in ants.iter() {
+        let facing = ant.secret_desire.normalize() * 1.0;
+
+        let start = ant_trans.translation.xy() - facing;
+        let end = ant_trans.translation.xy() + facing;
+
+        gizmos.line_2d(start.xy(), end.xy(), Color::WHITE);
     }
 }
 
