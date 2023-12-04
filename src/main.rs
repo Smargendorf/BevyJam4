@@ -36,7 +36,8 @@ fn setup(
         MaterialMesh2dBundle {
             mesh: meshes.add(shape::Circle::default().into()).into(),
             material: materials.add(ColorMaterial::from(PLAYER_COLOR)),
-            transform: Transform::from_translation(world_map::world_map_center_3d()).with_scale(ANT_SIZE),
+            transform: Transform::from_translation(world_map::world_map_center_3d())
+                .with_scale(ANT_SIZE),
             ..default()
         },
         Player,
@@ -64,7 +65,11 @@ fn setup(
     for _ in 0..1000 {
         commands.spawn(behavior::AntBundle {
             ant: Ant::default(),
-            transform: Transform::default().with_translation(Vec3::new(world_map::world_map_center().x, world_map::world_map_center().y, 0.)),
+            transform: Transform::default().with_translation(Vec3::new(
+                world_map::world_map_center().x,
+                world_map::world_map_center().y,
+                0.,
+            )),
             rng: rng.fork_rng(),
         });
     }

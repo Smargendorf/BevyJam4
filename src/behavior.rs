@@ -165,6 +165,8 @@ pub fn update_ant_movement(
     food: Query<&Transform, (With<Food>, Without<Ant>, Without<Pheromone>)>,
     time: Res<Time>,
 ) {
+    let world_center = world_map_center();
+
     for (mut ant_trans, mut ant, mut rng) in ants.iter_mut() {
         match ant.state {
             AntState::Wandering => {
@@ -177,7 +179,7 @@ pub fn update_ant_movement(
                 }
             }
             AntState::HasFood => {
-                if ant_trans.translation.length() < DETECTION_RADIUS {
+                if (ant_trans.translation.xy() - world_center).length() < DETECTION_RADIUS {
                     ant.state = AntState::Wandering;
                     ant.secret_desire *= -1.0;
                     ant_trans.rotation *= Quat::from_euler(EulerRot::ZXY, PI, 0.0, 0.0);
@@ -287,12 +289,12 @@ pub fn debug_ants(ants: Query<(&Ant, &Transform)>, mut gizmos: Gizmos) {
 
 pub fn debug_ants_minimal(ants: Query<(&Ant, &Transform)>, mut gizmos: Gizmos) {
     for (ant, ant_trans) in ants.iter() {
-        let facing = ant.secret_desire.normalize() * 1.0;
+        let facing = ant.secret_desire.normalize() * 2.0;
 
         let start = ant_trans.translation.xy() - facing;
         let end = ant_trans.translation.xy() + facing;
 
-        gizmos.line_2d(start.xy(), end.xy(), Color::WHITE);
+        gizmos.line_2d(start.xy(), end.xy(), Color::BLACK);
     }
 }
 
