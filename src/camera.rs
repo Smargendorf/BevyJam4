@@ -2,8 +2,6 @@ use bevy::input::mouse::MouseWheel;
 use bevy::prelude::*;
 
 use crate::components::*;
-use bevy_prng::ChaCha8Rng;
-use bevy_rand::prelude::*;
 
 pub struct CameraPlugin;
 
@@ -16,8 +14,6 @@ impl Plugin for CameraPlugin {
 
 pub fn camera_setup(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     // Camera
     commands.spawn((Camera2dBundle::default(), GameCamera));
@@ -48,11 +44,11 @@ pub fn move_player(
 }
 
 pub fn camera_chase(
-    playerQuery: Query<&Transform, With<Player>>,
-    mut cameraQuery: Query<&mut Transform, (Without<Player>, With<GameCamera>)>,
+    player_q: Query<&Transform, With<Player>>,
+    mut camera_q: Query<&mut Transform, (Without<Player>, With<GameCamera>)>,
 ) {
-    let player_transform = playerQuery.single();
-    let mut camera_transform = cameraQuery.single_mut();
+    let player_transform = player_q.single();
+    let mut camera_transform = camera_q.single_mut();
 
     camera_transform.translation = player_transform.translation;
 }
@@ -66,7 +62,7 @@ pub fn scroll_events(
 
     let mut delta = 0.0;
     use bevy::input::mouse::MouseScrollUnit;
-    for ev in scroll_evr.iter() {
+    for ev in scroll_evr.read() {
         match ev.unit {
             MouseScrollUnit::Line => {
                 delta += ev.y;

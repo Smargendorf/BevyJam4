@@ -2,9 +2,8 @@ use std::collections::HashMap;
 
 use bevy::{
     math::Vec4,
-    prelude::{App, AssetServer, Camera2dBundle, Commands, Res, Startup, UVec2, Vec2},
+    prelude::{App, AssetServer, Startup, UVec2, Vec2},
     render::render_resource::FilterMode,
-    DefaultPlugins,
 };
 
 use bevy::prelude::*;
@@ -22,7 +21,6 @@ use bevy_entitiles::{
 const TILE_SIZE: Vec2 = Vec2::new(16., 16.);
 const MAP_SIZE: UVec2 = UVec2::new(100, 100);
 
-const BUILDING_COLOR: Vec4 = Vec4::new(0.8, 1., 0.8, 0.1);
 const TUNNEL_COLOR: Vec4 = Vec4::new(0.15, 0.1, 0., 1.);
 const QUEEN_CHAMBER_COLOR: Vec4 = Vec4::new(0.73, 0.12, 63., 1.);
 const FOOD_STORAGE_COLOR: Vec4 = Vec4::new(0.2, 0.73, 0.12, 1.);
@@ -119,7 +117,7 @@ pub fn update_cursor_pos(
     mut cursor_moved_events: EventReader<CursorMoved>,
     mut cursor_pos: ResMut<CursorPos>,
 ) {
-    for cursor_moved in cursor_moved_events.iter() {
+    for cursor_moved in cursor_moved_events.read() {
         // To get the mouse's world position, we have to transform its window position by
         // any transforms on the camera. This is done by projecting the cursor position into
         // camera space (world space).
