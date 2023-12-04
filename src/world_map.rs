@@ -68,7 +68,7 @@ pub struct SelectedBuilding {
 pub struct Building(BuildingType);
 
 #[derive(Component)]
-pub struct Buildings
+pub struct ZLevel
 {
     z_level: u32,
     buildings: Vec<BuildingType>
@@ -127,7 +127,7 @@ fn setup(mut commands: Commands, assets_server: Res<AssetServer>) {
 
     let mut buildings = Vec::new();
     buildings.resize(MAP_SIZE.x as usize * MAP_SIZE.y as usize, BuildingType::None);
-    commands.spawn(Buildings{
+    commands.spawn(ZLevel{
         z_level: 0,
         buildings: buildings
     });
@@ -180,20 +180,20 @@ fn reset_hovered_tiles(
     mut tilemap_q: Query<&mut Tilemap>,
     hovered_tiles_q: Query<(Entity, &MapPos), With<HoveredTile>>,
     selected_z_level_q: Query<&SelectedZLevel>,
-    buildings_q: Query<&Buildings>,
+    z_level_q: Query<&ZLevel>,
     building_type_color_map_q: Query<&BuildingTypeToColorMap>,
 ) {
     // find buildings for z level
     let selected_z_level = selected_z_level_q.single().0;
     let mut tilemap = tilemap_q.single_mut();
     let building_color_map = building_type_color_map_q.single();
-    for buildings in buildings_q.iter() {
-        if buildings.z_level != selected_z_level {
+    for z_level in z_level_q.iter() {
+        if z_level.z_level != selected_z_level {
             continue;
         }
 
         for (entity, hovered_tile_pos) in hovered_tiles_q.iter() {
-            let building_type = buildings.buildings[two_d_index_to_one_d_index(hovered_tile_pos.0.xy())];
+            let building_type = z_level.buildings[two_d_index_to_one_d_index(hovered_tile_pos.0.xy())];
             let color = building_color_map.0.get(&building_type).unwrap();
             tilemap.set(
                 &mut commands,
@@ -239,7 +239,7 @@ fn mouse_building(
     selected_building_q: Query<&mut SelectedBuilding>,
     current_z_level_q: Query<&SelectedZLevel>,
     building_type_color_map_q: Query<&BuildingTypeToColorMap>,
-    mut buildings_q: Query<&mut Buildings>,
+    mut z_level_q: Query<&mut ZLevel>,
 ) {
     if !buttons.pressed(MouseButton::Left) {
         return;
@@ -260,12 +260,12 @@ fn mouse_building(
         &TileBuilder::new(NORMAL_TILE_INDEX).with_color(new_tile_color),
     );
 
-    for mut buildings in buildings_q.iter_mut() {
-        if buildings.z_level != selected_z_level.0 {
+    for mut z_level in z_level_q.iter_mut() {
+        if z_level.z_level != selected_z_level.0 {
             continue;
         }
         
-        buildings.buildings[two_d_index_to_one_d_index(cursor_map_pos.xy())] = selected_building.selected_type;
+        z_level.buildings[two_d_index_to_one_d_index(cursor_map_pos.xy())] = selected_building.selected_type;
     }
 }
 
@@ -298,7 +298,7 @@ fn change_selected_z_level(
     keyboard_input: Res<Input<KeyCode>>,
     mut selected_z_level_q: Query<&mut SelectedZLevel>,
     mut tilemap_q: Query<&mut Tilemap>,
-    buildings_q: Query<&Buildings>,
+    z_level_q: Query<&ZLevel>,
     building_type_color_map_q: Query<&BuildingTypeToColorMap>,
 ) {
     let mut tilemap = tilemap_q.single_mut();
@@ -330,15 +330,15 @@ fn change_selected_z_level(
 
     // try to find the buildings with the matching z level
     let mut found_z_layer = false;
-    for buildings in buildings_q.iter() {
-        if buildings.z_level != selected_z_level.0 {
+    for z_level in z_level_q.iter() {
+        if z_level.z_level != selected_z_level.0 {
             continue;
         }
 
         found_z_layer = true;
 
-        for i_building in 0..buildings.buildings.len() {
-            let building_type = buildings.buildings[i_building];
+        for i_building in 0..z_level.buildings.len() {
+            let building_type = z_level.buildings[i_building];
             let color = building_color_map.0.get(&building_type).cloned().unwrap();
 
             tilemap.set(
@@ -353,7 +353,7 @@ fn change_selected_z_level(
     if !found_z_layer {
         let mut buildings = Vec::new();
         buildings.resize(MAP_SIZE.x as usize * MAP_SIZE.y as usize, BuildingType::None);
-        commands.spawn(Buildings{
+        commands.spawn(ZLevel{
             z_level: selected_z_level.0,
             buildings: buildings
         });
