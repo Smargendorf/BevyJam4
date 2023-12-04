@@ -36,7 +36,7 @@ fn setup(
         MaterialMesh2dBundle {
             mesh: meshes.add(shape::Circle::default().into()).into(),
             material: materials.add(ColorMaterial::from(PLAYER_COLOR)),
-            transform: Transform::from_translation(CAMERA_STARTING_POSITION).with_scale(ANT_SIZE),
+            transform: Transform::from_translation(world_map::world_map_center_3d()).with_scale(ANT_SIZE),
             ..default()
         },
         Player,
@@ -44,8 +44,8 @@ fn setup(
 
     for _ in 0..4 {
         let transform = Transform::from_translation(Vec3::new(
-            (rng.next_u32() as i32 % 500) as f32,
-            (rng.next_u32() as i32 % 300) as f32,
+            (rng.next_u32() as i32 % 500) as f32 + world_map::world_map_center().x,
+            (rng.next_u32() as i32 % 300) as f32 + world_map::world_map_center().y,
             1.0,
         ))
         .with_scale(ANT_SIZE);
@@ -64,7 +64,7 @@ fn setup(
     for _ in 0..100 {
         commands.spawn(behavior::AntBundle {
             ant: Ant::default(),
-            transform: Transform::default(),
+            transform: Transform::default().with_translation(Vec3::new(world_map::world_map_center().x, world_map::world_map_center().y, 0.)),
             rng: rng.fork_rng(),
         });
     }

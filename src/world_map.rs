@@ -18,8 +18,20 @@ use bevy_entitiles::{
     EntiTilesPlugin,
 };
 
-const TILE_SIZE: Vec2 = Vec2::new(16., 16.);
-const MAP_SIZE: UVec2 = UVec2::new(100, 100);
+pub const TILE_SIZE: Vec2 = Vec2::new(16., 16.);
+pub const MAP_SIZE: UVec2 = UVec2::new(100, 100);
+
+pub fn world_map_size() -> Vec2 {
+    return TILE_SIZE*(MAP_SIZE.as_vec2());
+}
+
+pub fn world_map_center() -> Vec2 {
+    return world_map_size() / 2.;
+}
+pub fn world_map_center_3d() -> Vec3 {
+    let center = world_map_center();
+    return Vec3::new(center.x, center.y, 0.);
+}
 
 const TUNNEL_COLOR: Vec4 = Vec4::new(0.15, 0.1, 0., 1.);
 const QUEEN_CHAMBER_COLOR: Vec4 = Vec4::new(0.73, 0.12, 63., 1.);
