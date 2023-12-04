@@ -24,7 +24,6 @@ const MAP_SIZE: UVec2 = UVec2::new(100, 100);
 const TUNNEL_COLOR: Vec4 = Vec4::new(0.15, 0.1, 0., 1.);
 const QUEEN_CHAMBER_COLOR: Vec4 = Vec4::new(0.73, 0.12, 63., 1.);
 const FOOD_STORAGE_COLOR: Vec4 = Vec4::new(0.2, 0.73, 0.12, 1.);
-const BUILDING_TILE_INDEX: u32 = 1;
 
 const HOVER_COLOR: Vec4 = Vec4::new(0., 0., 0., 0.1);
 
@@ -64,7 +63,7 @@ pub struct Buildings
 }
 
 #[derive(Component)]
-pub struct MapPos(UVec3);
+pub struct MapPos(UVec2);
 
 #[derive(Component)]
 pub struct BuildingTypeToColorMap(HashMap<BuildingType, Vec4>);
@@ -139,15 +138,7 @@ impl Default for CursorPos {
     }
 }
 
-fn world_pos_to_three_d_index(pos: Vec2, z_level: &SelectedZLevel) -> UVec3 {
-    return UVec3::new(
-        (pos.x / TILE_SIZE.x) as u32,
-        (pos.y / TILE_SIZE.y) as u32,
-        z_level.0,
-    );
-}
-
-fn world_pos_to_two_d_index(pos: Vec2, z_level: &SelectedZLevel) -> UVec2 {
+fn world_pos_to_two_d_index(pos: Vec2) -> UVec2 {
     return UVec2::new(
         (pos.x / TILE_SIZE.x) as u32,
         (pos.y / TILE_SIZE.y) as u32,
@@ -182,7 +173,6 @@ fn reset_hovered_tiles(
 ) {
     // find buildings for z level
     let selected_z_level = selected_z_level_q.single().0;
-    let mut selected_buildings: &Buildings;
     let mut tilemap = tilemap_q.single_mut();
     let building_color_map = building_type_color_map_q.single();
     for buildings in buildings_q.iter() {
@@ -190,9 +180,8 @@ fn reset_hovered_tiles(
             continue;
         }
 
-        selected_buildings = &buildings;
         for (entity, hovered_tile_pos) in hovered_tiles_q.iter() {
-            let building_type = selected_buildings.buildings[two_d_index_to_one_d_index(hovered_tile_pos.0.xy())];
+            let building_type = buildings.buildings[two_d_index_to_one_d_index(hovered_tile_pos.0.xy())];
             let color = building_color_map.0.get(&building_type).unwrap();
             tilemap.set(
                 &mut commands,
@@ -210,7 +199,6 @@ fn mouse_hover(
     mut commands: Commands,
     buttons: Res<Input<MouseButton>>,
     cursor_pos: Res<CursorPos>,
-    current_z_level_q: Query<&SelectedZLevel>,
     mut tilemap_q: Query<&mut Tilemap>,
 ) {
     if buttons.pressed(MouseButton::Left) {
@@ -218,7 +206,7 @@ fn mouse_hover(
     }
 
     let mut tilemap = tilemap_q.single_mut();
-    let cursor_map_pos = world_pos_to_three_d_index(cursor_pos.0, current_z_level_q.single());
+    let cursor_map_pos = world_pos_to_two_d_index(cursor_pos.0);
     tilemap.set(
         &mut commands,
         cursor_map_pos.xy(),
@@ -246,11 +234,11 @@ fn mouse_building(
     }
 
     let selected_z_level = current_z_level_q.single();
-    let cursor_map_pos = world_pos_to_three_d_index(cursor_pos.0, selected_z_level);
+    let cursor_map_pos = world_pos_to_two_d_index(cursor_pos.0);
 
     let selected_building: &SelectedBuilding = selected_building_q.single();
     let building_color_map = building_type_color_map_q.single();
-    let new_tile_color: Vec4 = building_color_map.0.get(&selected_building.selected_type).cloned().unwrap();;
+    let new_tile_color: Vec4 = building_color_map.0.get(&selected_building.selected_type).cloned().unwrap();
 
     let mut tilemap = tilemap_q.single_mut();
 
