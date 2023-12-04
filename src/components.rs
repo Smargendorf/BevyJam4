@@ -20,8 +20,8 @@ impl Default for Ant {
         Ant {
             state: AntState::Wandering,
             speed: 50.0,
-            vision_range: 2.0,
-            vision_arc: 2.0,
+            vision_range: 20.0,
+            vision_arc: 1.5,
             time_until_poop: ANT_POOP_INTERVAL,
             secret_desire: Vec2::ZERO,
         }
