@@ -2,6 +2,8 @@ use crate::*;
 use bevy::{ecs::system::Despawn, math::*};
 use std::f32::consts::{PI, TAU};
 
+use world_map::*;
+
 // TODO: Does each ant need to be able to identify its own "home this way" pheromone?
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub enum PheromoneKind {
@@ -133,7 +135,7 @@ fn ant_desired_direction(
             }
         }
         AntState::HasFood => {
-            let to_home = -ant_trans.translation.xy();
+            let to_home = world_map_center() - ant_trans.translation.xy();
             cum_dir += to_home.normalize() * HINT_FACTOR;
         }
     }
@@ -198,11 +200,13 @@ pub fn update_ant_movement(
 
         let potential_position = ant_trans.translation + actual_offset;
 
-        if potential_position.x > 500.0 || potential_position.x < -500.0 {
+        let world_map_size = world_map_size();
+
+        if potential_position.x > world_map_size.x || potential_position.x < 0. {
             actual_offset.x *= -1.0;
             ant.secret_desire.x *= -1.0;
         }
-        if potential_position.y > 300.0 || potential_position.y < -300.0 {
+        if potential_position.y > world_map_size.y || potential_position.y < 0. {
             actual_offset.y *= -1.0;
             ant.secret_desire.y *= -1.0;
         }
