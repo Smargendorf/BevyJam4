@@ -90,7 +90,7 @@ impl ZLevel {
 
     pub fn is_tile_walkable(&self, pos: UVec2) -> bool{
         match two_d_index_to_one_d_index(pos){
-            Some(i) => return self.buildings[i] == BuildingType::Tunnel,
+            Some(i) => return self.tiles[i].building == BuildingType::Tunnel,
             None => return false,
         }
     }
