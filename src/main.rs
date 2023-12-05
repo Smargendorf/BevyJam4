@@ -61,7 +61,7 @@ fn setup(
         ));
     }
 
-    for _ in 0..500 {
+    for _ in 0..1000 {
         commands.spawn(behavior::AntBundle {
             ant: Ant::default(),
             transform: Transform::default().with_translation(Vec3::new(
@@ -84,6 +84,7 @@ fn main() {
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .add_systems(Startup, setup)
         .add_systems(Update, bevy::window::close_on_esc)
+        .add_systems(Startup, behavior::setup_pher_tiles)
         .add_systems(
             Update,
             (
@@ -96,7 +97,7 @@ fn main() {
             Update,
             (
                 // behavior::debug_ants,
-                behavior::debug_phers,
+                // behavior::debug_phers,
                 behavior::debug_ants_minimal,
             ),
         )

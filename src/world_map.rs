@@ -1,10 +1,6 @@
 use std::collections::HashMap;
 
-use bevy::{
-    math::Vec4,
-    prelude::{App, AssetServer, Startup, UVec2, Vec2},
-    render::render_resource::FilterMode,
-};
+use bevy::{math::Vec4, render::render_resource::FilterMode};
 
 use bevy::prelude::*;
 
@@ -74,7 +70,7 @@ pub struct ZLevel {
 }
 
 #[derive(Component)]
-pub struct MapPos(UVec2);
+pub struct MapPos(pub UVec2);
 
 #[derive(Component)]
 pub struct BuildingTypeToColorMap(HashMap<BuildingType, Vec4>);
@@ -156,7 +152,31 @@ impl Default for CursorPos {
     }
 }
 
-fn world_pos_to_two_d_index(pos: Vec2) -> UVec2 {
+pub fn get_local_neighborhood(world_pos: Vec2) -> Vec<UVec2> {
+    vec![
+        Vec2::new(-1.0, -1.0),
+        Vec2::new(0.0, -1.0),
+        Vec2::new(1.0, -1.0),
+        Vec2::new(-1.0, 0.0),
+        Vec2::new(0.0, 0.0),
+        Vec2::new(1.0, 0.0),
+        Vec2::new(-1.0, 1.0),
+        Vec2::new(0.0, 1.0),
+        Vec2::new(1.0, 1.0),
+    ]
+    .iter()
+    .map(|offset| world_pos + *offset)
+    .filter(|npos| {
+        npos.x >= 0.0
+            && npos.x < MAP_SIZE.x as f32 * TILE_SIZE.x
+            && npos.y >= 0.0
+            && npos.y < MAP_SIZE.y as f32 * TILE_SIZE.y
+    })
+    .map(|npos| world_pos_to_two_d_index(npos))
+    .collect()
+}
+
+pub fn world_pos_to_two_d_index(pos: Vec2) -> UVec2 {
     return UVec2::new((pos.x / TILE_SIZE.x) as u32, (pos.y / TILE_SIZE.y) as u32);
 }
 
