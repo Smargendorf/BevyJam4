@@ -40,7 +40,7 @@ const FOOD_STORAGE_COLOR: Vec4 = Vec4::new(0.2, 0.73, 0.12, 1.);
 const HOVER_COLOR: Vec4 = Vec4::new(0., 0., 0., 0.1);
 
 const NORMAL_COLOR: Vec4 = Vec4::new(1., 1., 1., 1.);
-const NORMAL_TILE_INDEX: u32 = 1;
+const NORMAL_TILE_INDEX: u32 = 0;
 
 #[derive(Component)]
 pub struct HoveredTile;
@@ -79,6 +79,9 @@ pub struct MapPos(UVec2);
 #[derive(Component)]
 pub struct BuildingTypeToColorMap(HashMap<BuildingType, Vec4>);
 
+#[derive(Component)]
+pub struct BuildingTypeToTileIndexMap(HashMap<BuildingType, u32>);
+
 pub struct WorldMapPlugin;
 
 impl Plugin for WorldMapPlugin {
@@ -100,6 +103,13 @@ impl Plugin for WorldMapPlugin {
 }
 
 fn setup(mut commands: Commands, assets_server: Res<AssetServer>) {
+    commands.spawn(BuildingTypeToTileIndexMap(HashMap::from([
+        (BuildingType::None, 0),
+        (BuildingType::Tunnel, 1),
+        (BuildingType::QueenChamber, 2),
+        (BuildingType::FoodStorage, 3),
+    ])));
+
     let (_, mut tilemap) = TilemapBuilder::new(TileType::Square, MAP_SIZE, TILE_SIZE)
         .with_texture(
             assets_server.load("test_square.png"),
@@ -115,7 +125,7 @@ fn setup(mut commands: Commands, assets_server: Res<AssetServer>) {
     tilemap.fill_rect(
         &mut commands,
         FillArea::full(&tilemap),
-        &TileBuilder::new(0),
+        &TileBuilder::new(NORMAL_TILE_INDEX),
     );
 
     commands.spawn(SelectedBuilding {
@@ -134,12 +144,6 @@ fn setup(mut commands: Commands, assets_server: Res<AssetServer>) {
         buildings: buildings,
     });
 
-    commands.spawn(BuildingTypeToColorMap(HashMap::from([
-        (BuildingType::None, NORMAL_COLOR),
-        (BuildingType::Tunnel, TUNNEL_COLOR),
-        (BuildingType::QueenChamber, QUEEN_CHAMBER_COLOR),
-        (BuildingType::FoodStorage, FOOD_STORAGE_COLOR),
-    ])));
 }
 
 #[derive(Resource)]
@@ -180,12 +184,12 @@ fn reset_hovered_tiles(
     hovered_tiles_q: Query<(Entity, &MapPos), With<HoveredTile>>,
     selected_z_level_q: Query<&SelectedZLevel>,
     z_level_q: Query<&ZLevel>,
-    building_type_color_map_q: Query<&BuildingTypeToColorMap>,
+    building_type_tile_index_map_q: Query<&BuildingTypeToTileIndexMap>,
 ) {
     // find buildings for z level
     let selected_z_level = selected_z_level_q.single().0;
     let mut tilemap = tilemap_q.single_mut();
-    let building_color_map = building_type_color_map_q.single();
+    let building_tile_map = building_type_tile_index_map_q.single();
     for z_level in z_level_q.iter() {
         if z_level.z_level != selected_z_level {
             continue;
@@ -194,11 +198,11 @@ fn reset_hovered_tiles(
         for (entity, hovered_tile_pos) in hovered_tiles_q.iter() {
             if let Some(tilemap_index) = two_d_index_to_one_d_index(hovered_tile_pos.0.xy()) {
                 let building_type = z_level.buildings[tilemap_index];
-                let color = building_color_map.0.get(&building_type).unwrap();
+                let tile = building_tile_map.0.get(&building_type).unwrap();
                 tilemap.set(
                     &mut commands,
                     hovered_tile_pos.0.xy(),
-                    &TileBuilder::new(0).with_color(*color),
+                    &TileBuilder::new(*tile).with_color(NORMAL_COLOR),
                 );
 
                 commands.entity(entity).despawn();
@@ -236,7 +240,7 @@ fn mouse_building(
     mut tilemap_q: Query<&mut Tilemap>,
     selected_building_q: Query<&mut SelectedBuilding>,
     current_z_level_q: Query<&SelectedZLevel>,
-    building_type_color_map_q: Query<&BuildingTypeToColorMap>,
+    building_type_tile_index_map_q: Query<&BuildingTypeToTileIndexMap>,
     mut z_level_q: Query<&mut ZLevel>,
 ) {
     if !buttons.pressed(MouseButton::Left) {
@@ -247,19 +251,16 @@ fn mouse_building(
     let cursor_map_pos = world_pos_to_two_d_index(cursor_pos.0);
 
     let selected_building: &SelectedBuilding = selected_building_q.single();
-    let building_color_map = building_type_color_map_q.single();
-    let new_tile_color: Vec4 = building_color_map
-        .0
-        .get(&selected_building.selected_type)
-        .cloned()
-        .unwrap();
+    let building_tile_map = building_type_tile_index_map_q.single();
+
+    let tile = building_tile_map.0.get(&selected_building.selected_type).unwrap();
 
     let mut tilemap = tilemap_q.single_mut();
 
     tilemap.set(
         &mut commands,
         cursor_map_pos.xy(),
-        &TileBuilder::new(NORMAL_TILE_INDEX).with_color(new_tile_color),
+        &TileBuilder::new(*tile).with_color(NORMAL_COLOR),
     );
 
     for mut z_level in z_level_q.iter_mut() {
@@ -305,11 +306,11 @@ fn change_selected_z_level(
     mut selected_z_level_q: Query<&mut SelectedZLevel>,
     mut tilemap_q: Query<&mut Tilemap>,
     z_level_q: Query<&ZLevel>,
-    building_type_color_map_q: Query<&BuildingTypeToColorMap>,
+    building_type_tile_index_map_q: Query<&BuildingTypeToTileIndexMap>,
 ) {
     let mut tilemap = tilemap_q.single_mut();
     let mut selected_z_level = selected_z_level_q.single_mut();
-    let building_color_map = building_type_color_map_q.single();
+    let building_tile_map = building_type_tile_index_map_q.single();
 
     if keyboard_input.just_pressed(KeyCode::BracketRight) {
         selected_z_level.0 += 1;
@@ -326,7 +327,8 @@ fn change_selected_z_level(
 
     // first blank the whole tilemap
     let fill_area = FillArea::full(&tilemap);
-    tilemap.fill_rect(&mut commands, fill_area, &TileBuilder::new(0));
+    let tile_empty = building_tile_map.0.get(&BuildingType::None).cloned().unwrap();
+    tilemap.fill_rect(&mut commands, fill_area, &TileBuilder::new(tile_empty));
 
     // try to find the buildings with the matching z level
     let mut found_z_layer = false;
@@ -339,12 +341,12 @@ fn change_selected_z_level(
 
         for i_building in 0..z_level.buildings.len() {
             let building_type = z_level.buildings[i_building];
-            let color = building_color_map.0.get(&building_type).cloned().unwrap();
+            let tile = building_tile_map.0.get(&building_type).cloned().unwrap();
 
             tilemap.set(
                 &mut commands,
                 one_d_index_to_two_d_index(i_building),
-                &TileBuilder::new(0).with_color(color),
+                &TileBuilder::new(tile).with_color(NORMAL_COLOR),
             );
         }
     }

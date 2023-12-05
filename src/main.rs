@@ -20,7 +20,6 @@ use util::*;
 const BACKGROUND_COLOR: Color = Color::rgb(0.1, 0.1, 0.1);
 const PLAYER_COLOR: Color = Color::rgb(1.0, 0.5, 0.5);
 
-const CAMERA_STARTING_POSITION: Vec3 = Vec3::new(0.0, 0.0, 1.0);
 const ANT_SIZE: Vec3 = Vec3::new(30.0, 30.0, 0.0);
 
 fn setup(
