@@ -24,25 +24,21 @@ pub fn world_map_size() -> Vec2 {
 pub fn world_map_center() -> Vec2 {
     return world_map_size() / 2.;
 }
+
 pub fn world_map_center_3d() -> Vec3 {
     let center = world_map_center();
     return Vec3::new(center.x, center.y, 0.);
 }
 
-const TUNNEL_COLOR: Vec4 = Vec4::new(0.15, 0.1, 0., 1.);
-const QUEEN_CHAMBER_COLOR: Vec4 = Vec4::new(0.73, 0.12, 63., 1.);
-const FOOD_STORAGE_COLOR: Vec4 = Vec4::new(0.2, 0.73, 0.12, 1.);
-
 const HOVER_COLOR: Vec4 = Vec4::new(0., 0., 0., 0.1);
-
 const NORMAL_COLOR: Vec4 = Vec4::new(1., 1., 1., 1.);
-const NORMAL_TILE_INDEX: u32 = 1;
+const NORMAL_TILE_INDEX: u32 = 0;
 
 #[derive(Component)]
 pub struct HoveredTile;
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
-enum BuildingType {
+pub enum BuildingType {
     None,
     Tunnel,
     QueenChamber,
@@ -50,7 +46,7 @@ enum BuildingType {
 }
 
 #[derive(Component)]
-pub struct SelectedZLevel(u32);
+pub struct SelectedZLevel(i32);
 
 #[derive(Component)]
 pub struct TileMapZLevel(u32);
@@ -61,11 +57,8 @@ pub struct SelectedBuilding {
 }
 
 #[derive(Component)]
-pub struct Building(BuildingType);
-
-#[derive(Component)]
 pub struct ZLevel {
-    z_level: u32,
+    z_level: i32,
     tiles: Vec<TileState>,
 }
 
@@ -84,11 +77,36 @@ impl Default for TileState {
     }
 }
 
+impl ZLevel {
+    pub fn set_area(&mut self, area: URect, building_type: BuildingType) {
+        for x in area.min.x..area.max.x {
+            for y in area.min.y..area.max.y {
+                if let Some(i) = two_d_index_to_one_d_index(UVec2::new(x, y)) {
+                    self.tiles[i].building = building_type;
+                }
+            }
+        }
+    }
+}
+
 #[derive(Component)]
 pub struct MapPos(pub UVec2);
 
 #[derive(Component)]
 pub struct BuildingTypeToColorMap(HashMap<BuildingType, Vec4>);
+
+#[derive(Component)]
+pub struct BuildingTypeToTileIndexMap(HashMap<BuildingType, u32>);
+
+#[derive(Resource)]
+pub struct CursorPos(Vec2);
+impl Default for CursorPos {
+    fn default() -> Self {
+        // Initialize the cursor pos at some far away place. It will get updated
+        // correctly when the cursor moves.
+        Self(Vec2::new(-1000.0, -1000.0))
+    }
+}
 
 pub struct WorldMapPlugin;
 
@@ -111,6 +129,13 @@ impl Plugin for WorldMapPlugin {
 }
 
 fn setup(mut commands: Commands, assets_server: Res<AssetServer>) {
+    commands.spawn(BuildingTypeToTileIndexMap(HashMap::from([
+        (BuildingType::None, 0),
+        (BuildingType::Tunnel, 1),
+        (BuildingType::QueenChamber, 2),
+        (BuildingType::FoodStorage, 3),
+    ])));
+
     let (_, mut tilemap) = TilemapBuilder::new(TileType::Square, MAP_SIZE, TILE_SIZE)
         .with_texture(
             assets_server.load("test_square.png"),
@@ -126,7 +151,7 @@ fn setup(mut commands: Commands, assets_server: Res<AssetServer>) {
     tilemap.fill_rect(
         &mut commands,
         FillArea::full(&tilemap),
-        &TileBuilder::new(0),
+        &TileBuilder::new(NORMAL_TILE_INDEX),
     );
 
     commands.spawn(SelectedBuilding {
@@ -140,24 +165,29 @@ fn setup(mut commands: Commands, assets_server: Res<AssetServer>) {
         MAP_SIZE.x as usize * MAP_SIZE.y as usize,
         TileState::default(),
     );
-    commands.spawn(ZLevel { z_level: 0, tiles });
 
-    commands.spawn(BuildingTypeToColorMap(HashMap::from([
-        (BuildingType::None, NORMAL_COLOR),
-        (BuildingType::Tunnel, TUNNEL_COLOR),
-        (BuildingType::QueenChamber, QUEEN_CHAMBER_COLOR),
-        (BuildingType::FoodStorage, FOOD_STORAGE_COLOR),
-    ])));
-}
+    let mut z_level = ZLevel { z_level: 0, tiles };
 
-#[derive(Resource)]
-pub struct CursorPos(Vec2);
-impl Default for CursorPos {
-    fn default() -> Self {
-        // Initialize the cursor pos at some far away place. It will get updated
-        // correctly when the cursor moves.
-        Self(Vec2::new(-1000.0, -1000.0))
-    }
+    let starting_tunnel_size = UVec2::new(5, 5);
+
+    z_level.set_area(
+        URect::from_corners(
+            MAP_SIZE / 2 - starting_tunnel_size,
+            MAP_SIZE / 2 + starting_tunnel_size,
+        ),
+        BuildingType::Tunnel,
+    );
+    commands.spawn(z_level);
+
+    tilemap.fill_rect(
+        &mut commands,
+        FillArea::new(
+            MAP_SIZE / 2 - starting_tunnel_size,
+            Some(starting_tunnel_size * 2),
+            &tilemap,
+        ),
+        &TileBuilder::new(1),
+    );
 }
 
 pub fn get_local_neighborhood(world_pos: Vec2) -> Vec<UVec2> {
@@ -212,12 +242,12 @@ fn reset_hovered_tiles(
     hovered_tiles_q: Query<(Entity, &MapPos), With<HoveredTile>>,
     selected_z_level_q: Query<&SelectedZLevel>,
     z_level_q: Query<&ZLevel>,
-    building_type_color_map_q: Query<&BuildingTypeToColorMap>,
+    building_type_tile_index_map_q: Query<&BuildingTypeToTileIndexMap>,
 ) {
     // find buildings for z level
     let selected_z_level = selected_z_level_q.single().0;
     let mut tilemap = tilemap_q.single_mut();
-    let building_color_map = building_type_color_map_q.single();
+    let building_tile_map = building_type_tile_index_map_q.single();
     for z_level in z_level_q.iter() {
         if z_level.z_level != selected_z_level {
             continue;
@@ -226,11 +256,11 @@ fn reset_hovered_tiles(
         for (entity, hovered_tile_pos) in hovered_tiles_q.iter() {
             if let Some(tilemap_index) = two_d_index_to_one_d_index(hovered_tile_pos.0.xy()) {
                 let building = z_level.tiles[tilemap_index].building;
-                let color = building_color_map.0.get(&building).unwrap();
+                let tile = building_tile_map.0.get(&building).unwrap();
                 tilemap.set(
                     &mut commands,
                     hovered_tile_pos.0.xy(),
-                    &TileBuilder::new(0).with_color(*color),
+                    &TileBuilder::new(*tile).with_color(NORMAL_COLOR),
                 );
 
                 commands.entity(entity).despawn();
@@ -268,7 +298,7 @@ fn mouse_building(
     mut tilemap_q: Query<&mut Tilemap>,
     selected_building_q: Query<&mut SelectedBuilding>,
     current_z_level_q: Query<&SelectedZLevel>,
-    building_type_color_map_q: Query<&BuildingTypeToColorMap>,
+    building_type_tile_index_map_q: Query<&BuildingTypeToTileIndexMap>,
     mut z_level_q: Query<&mut ZLevel>,
 ) {
     if !buttons.pressed(MouseButton::Left) {
@@ -279,11 +309,11 @@ fn mouse_building(
     let cursor_map_pos = world_pos_to_two_d_index(cursor_pos.0);
 
     let selected_building: &SelectedBuilding = selected_building_q.single();
-    let building_color_map = building_type_color_map_q.single();
-    let new_tile_color: Vec4 = building_color_map
+    let building_tile_map = building_type_tile_index_map_q.single();
+
+    let tile = building_tile_map
         .0
         .get(&selected_building.selected_type)
-        .cloned()
         .unwrap();
 
     let mut tilemap = tilemap_q.single_mut();
@@ -291,7 +321,7 @@ fn mouse_building(
     tilemap.set(
         &mut commands,
         cursor_map_pos.xy(),
-        &TileBuilder::new(NORMAL_TILE_INDEX).with_color(new_tile_color),
+        &TileBuilder::new(*tile).with_color(NORMAL_COLOR),
     );
 
     for mut z_level in z_level_q.iter_mut() {
@@ -337,20 +367,15 @@ fn change_selected_z_level(
     mut selected_z_level_q: Query<&mut SelectedZLevel>,
     mut tilemap_q: Query<&mut Tilemap>,
     z_level_q: Query<&ZLevel>,
-    building_type_color_map_q: Query<&BuildingTypeToColorMap>,
+    building_type_tile_index_map_q: Query<&BuildingTypeToTileIndexMap>,
 ) {
     let mut tilemap = tilemap_q.single_mut();
     let mut selected_z_level = selected_z_level_q.single_mut();
-    let building_color_map = building_type_color_map_q.single();
+    let building_tile_map = building_type_tile_index_map_q.single();
 
     if keyboard_input.just_pressed(KeyCode::BracketRight) {
         selected_z_level.0 += 1;
     } else if keyboard_input.just_pressed(KeyCode::BracketLeft) {
-        // dont go below 0
-        if selected_z_level.0 == 0 {
-            return;
-        }
-
         selected_z_level.0 -= 1;
     } else {
         // no change return early
@@ -363,7 +388,12 @@ fn change_selected_z_level(
 
     // first blank the whole tilemap
     let fill_area = FillArea::full(&tilemap);
-    tilemap.fill_rect(&mut commands, fill_area, &TileBuilder::new(0));
+    let tile_empty = building_tile_map
+        .0
+        .get(&BuildingType::None)
+        .cloned()
+        .unwrap();
+    tilemap.fill_rect(&mut commands, fill_area, &TileBuilder::new(tile_empty));
 
     // try to find the buildings with the matching z level
     let mut found_z_layer = false;
@@ -376,12 +406,12 @@ fn change_selected_z_level(
 
         for i_tile in 0..z_level.tiles.len() {
             let building_type = z_level.tiles[i_tile].building;
-            let color = building_color_map.0.get(&building_type).cloned().unwrap();
+            let tile = building_tile_map.0.get(&building_type).cloned().unwrap();
 
             tilemap.set(
                 &mut commands,
                 one_d_index_to_two_d_index(i_tile),
-                &TileBuilder::new(0).with_color(color),
+                &TileBuilder::new(tile).with_color(NORMAL_COLOR),
             );
         }
     }
