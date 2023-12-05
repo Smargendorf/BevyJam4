@@ -66,7 +66,22 @@ pub struct Building(BuildingType);
 #[derive(Component)]
 pub struct ZLevel {
     z_level: u32,
-    buildings: Vec<BuildingType>,
+    tiles: Vec<TileState>,
+}
+
+#[derive(Clone)]
+pub struct TileState {
+    building: BuildingType,
+    pher_refs: Vec<Entity>,
+}
+
+impl Default for TileState {
+    fn default() -> Self {
+        Self {
+            building: BuildingType::None,
+            pher_refs: vec![],
+        }
+    }
 }
 
 #[derive(Component)]
@@ -120,15 +135,12 @@ fn setup(mut commands: Commands, assets_server: Res<AssetServer>) {
 
     commands.spawn(SelectedZLevel(0));
 
-    let mut buildings = Vec::new();
-    buildings.resize(
+    let mut tiles = Vec::new();
+    tiles.resize(
         MAP_SIZE.x as usize * MAP_SIZE.y as usize,
-        BuildingType::None,
+        TileState::default(),
     );
-    commands.spawn(ZLevel {
-        z_level: 0,
-        buildings: buildings,
-    });
+    commands.spawn(ZLevel { z_level: 0, tiles });
 
     commands.spawn(BuildingTypeToColorMap(HashMap::from([
         (BuildingType::None, NORMAL_COLOR),
@@ -213,8 +225,8 @@ fn reset_hovered_tiles(
 
         for (entity, hovered_tile_pos) in hovered_tiles_q.iter() {
             if let Some(tilemap_index) = two_d_index_to_one_d_index(hovered_tile_pos.0.xy()) {
-                let building_type = z_level.buildings[tilemap_index];
-                let color = building_color_map.0.get(&building_type).unwrap();
+                let building = z_level.tiles[tilemap_index].building;
+                let color = building_color_map.0.get(&building).unwrap();
                 tilemap.set(
                     &mut commands,
                     hovered_tile_pos.0.xy(),
@@ -288,7 +300,7 @@ fn mouse_building(
         }
 
         if let Some(index) = two_d_index_to_one_d_index(cursor_map_pos.xy()) {
-            z_level.buildings[index] = selected_building.selected_type;
+            z_level.tiles[index].building = selected_building.selected_type;
         }
     }
 }
@@ -362,13 +374,13 @@ fn change_selected_z_level(
 
         found_z_layer = true;
 
-        for i_building in 0..z_level.buildings.len() {
-            let building_type = z_level.buildings[i_building];
+        for i_tile in 0..z_level.tiles.len() {
+            let building_type = z_level.tiles[i_tile].building;
             let color = building_color_map.0.get(&building_type).cloned().unwrap();
 
             tilemap.set(
                 &mut commands,
-                one_d_index_to_two_d_index(i_building),
+                one_d_index_to_two_d_index(i_tile),
                 &TileBuilder::new(0).with_color(color),
             );
         }
@@ -376,14 +388,14 @@ fn change_selected_z_level(
 
     // if we didn't find an existing z layer make one
     if !found_z_layer {
-        let mut buildings = Vec::new();
-        buildings.resize(
+        let mut tiles = Vec::new();
+        tiles.resize(
             MAP_SIZE.x as usize * MAP_SIZE.y as usize,
-            BuildingType::None,
+            TileState::default(),
         );
         commands.spawn(ZLevel {
             z_level: selected_z_level.0,
-            buildings: buildings,
+            tiles,
         });
     }
 }
