@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::Index;
 
 use bevy::{math::Vec4, render::render_resource::FilterMode};
 
@@ -16,6 +17,7 @@ use bevy_entitiles::{
 
 pub const TILE_SIZE: Vec2 = Vec2::new(16., 16.);
 pub const MAP_SIZE: UVec2 = UVec2::new(100, 100);
+pub const MAP_DATA_SIZE: usize = (MAP_SIZE.x * MAP_SIZE.y) as usize;
 
 pub fn world_map_size() -> Vec2 {
     return TILE_SIZE * (MAP_SIZE.as_vec2());
@@ -59,7 +61,25 @@ pub struct SelectedBuilding {
 #[derive(Component)]
 pub struct ZLevel {
     z_level: i32,
-    tiles: Vec<TileState>,
+    tiles: [TileState; MAP_DATA_SIZE],
+}
+
+impl Index<UVec2> for ZLevel {
+    type Output = TileState;
+
+    fn index(&self, index: UVec2) -> &Self::Output {
+        &self.tiles[two_d_index_to_one_d_index(index).unwrap()]
+    }
+}
+
+impl ZLevel {
+    fn with_level(level: i32) -> ZLevel {
+        let default_tile = TileState::default();
+        ZLevel {
+            z_level: level,
+            tiles: std::array::from_fn(|_| default_tile.clone()),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -166,8 +186,7 @@ fn setup(mut commands: Commands, assets_server: Res<AssetServer>) {
         TileState::default(),
     );
 
-    let mut z_level = ZLevel { z_level: 0, tiles };
-
+    let mut z_level = ZLevel::with_level(0);
     let starting_tunnel_size = UVec2::new(5, 5);
 
     z_level.set_area(
@@ -423,9 +442,6 @@ fn change_selected_z_level(
             MAP_SIZE.x as usize * MAP_SIZE.y as usize,
             TileState::default(),
         );
-        commands.spawn(ZLevel {
-            z_level: selected_z_level.0,
-            tiles,
-        });
+        commands.spawn(ZLevel::with_level(selected_z_level.0));
     }
 }
