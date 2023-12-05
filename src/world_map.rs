@@ -58,8 +58,8 @@ pub struct SelectedBuilding {
 
 #[derive(Component)]
 pub struct ZLevel {
-    z_level: i32,
-    buildings: Vec<BuildingType>,
+    pub z_level: i32,
+    pub buildings: Vec<BuildingType>,
 }
 
 impl ZLevel {
@@ -71,6 +71,13 @@ impl ZLevel {
                     self.buildings[i] = building_type;
                 }
             }
+        }
+    }
+
+    pub fn is_tile_walkable(&self, pos: UVec2) -> bool{
+        match two_d_index_to_one_d_index(pos){
+            Some(i) => return self.buildings[i] == BuildingType::Tunnel,
+            None => return false,
         }
     }
 }
