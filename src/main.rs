@@ -61,7 +61,7 @@ fn setup(
         ));
     }
 
-    for _ in 0..1000 {
+    for _ in 0..500 {
         commands.spawn(behavior::AntBundle {
             ant: Ant::default(),
             transform: Transform::default().with_translation(Vec3::new(
