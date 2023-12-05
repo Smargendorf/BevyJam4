@@ -19,7 +19,7 @@ use bevy_entitiles::{
 };
 
 pub const TILE_SIZE: Vec2 = Vec2::new(16., 16.);
-pub const MAP_SIZE: UVec2 = UVec2::new(100, 100);
+pub const MAP_SIZE: UVec2 = UVec2::new(1000, 1000);
 
 pub fn world_map_size() -> Vec2 {
     return TILE_SIZE * (MAP_SIZE.as_vec2());
@@ -54,7 +54,7 @@ enum BuildingType {
 }
 
 #[derive(Component)]
-pub struct SelectedZLevel(u32);
+pub struct SelectedZLevel(i32);
 
 #[derive(Component)]
 pub struct TileMapZLevel(u32);
@@ -69,7 +69,7 @@ pub struct Building(BuildingType);
 
 #[derive(Component)]
 pub struct ZLevel {
-    z_level: u32,
+    z_level: i32,
     buildings: Vec<BuildingType>,
 }
 
@@ -314,11 +314,6 @@ fn change_selected_z_level(
     if keyboard_input.just_pressed(KeyCode::BracketRight) {
         selected_z_level.0 += 1;
     } else if keyboard_input.just_pressed(KeyCode::BracketLeft) {
-        // dont go below 0
-        if selected_z_level.0 == 0 {
-            return;
-        }
-
         selected_z_level.0 -= 1;
     } else {
         // no change return early
