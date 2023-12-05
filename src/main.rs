@@ -97,7 +97,7 @@ fn main() {
             Update,
             (
                 // behavior::debug_ants,
-                // behavior::debug_phers,
+                behavior::debug_phers,
                 behavior::debug_ants_minimal,
             ),
         )

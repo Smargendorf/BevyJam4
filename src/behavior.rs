@@ -86,7 +86,7 @@ fn ant_should_follow(ant_state: AntState, pher_kind: PheromoneKind) -> bool {
 
 const RANDOM_WALK_FACTOR: f32 = 0.3;
 const FOOD_HINT_THRESHOLD: f32 = 50.0;
-const HINT_FACTOR: f32 = 0.5;
+const HINT_FACTOR: f32 = 0.3;
 
 fn ant_desired_direction(
     ant: &mut Ant,
@@ -241,17 +241,20 @@ pub fn update_ant_movement(
         let potential_position = ant_trans.translation + actual_offset;
         let map_pos_potential = world_pos_to_two_d_index(potential_position.xy());
         let map_pos_current = world_pos_to_two_d_index(ant_trans.translation.xy());
-        if let Some(z_level) = z_level_q.iter().find(|z_level| z_level.z_level == 0)
-        {
+        if let Some(z_level) = z_level_q.iter().find(|z_level| z_level.z_level == 0) {
             let is_potential_tile_walkable = z_level.is_tile_walkable(map_pos_potential);
             let world_map_size = world_map_size();
-            if potential_position.x > world_map_size.x || potential_position.x < 0. 
-            || (!is_potential_tile_walkable && map_pos_potential.x != map_pos_current.x){
+            if potential_position.x > world_map_size.x
+                || potential_position.x < 0.
+                || (!is_potential_tile_walkable && map_pos_potential.x != map_pos_current.x)
+            {
                 actual_offset.x *= -1.0;
                 ant.secret_desire.x *= -1.0;
             }
-            if potential_position.y > world_map_size.y || potential_position.y < 0. 
-            || (!is_potential_tile_walkable && map_pos_potential.y != map_pos_current.y) {
+            if potential_position.y > world_map_size.y
+                || potential_position.y < 0.
+                || (!is_potential_tile_walkable && map_pos_potential.y != map_pos_current.y)
+            {
                 actual_offset.y *= -1.0;
                 ant.secret_desire.y *= -1.0;
             }

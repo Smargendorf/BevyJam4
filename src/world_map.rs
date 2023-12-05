@@ -61,7 +61,7 @@ pub struct SelectedBuilding {
 #[derive(Component)]
 pub struct ZLevel {
     pub z_level: i32,
-    pub tiles: [TileState; MAP_DATA_SIZE],
+    pub tiles: Vec<TileState>, // needs to be heap allocated
 }
 
 impl Index<UVec2> for ZLevel {
@@ -75,9 +75,13 @@ impl Index<UVec2> for ZLevel {
 impl ZLevel {
     fn with_level(level: i32) -> ZLevel {
         let default_tile = TileState::default();
+        let mut tiles = vec![];
+        for _ in 0..MAP_DATA_SIZE {
+            tiles.push(default_tile.clone());
+        }
         ZLevel {
             z_level: level,
-            tiles: std::array::from_fn(|_| default_tile.clone()),
+            tiles,
         }
     }
 }
