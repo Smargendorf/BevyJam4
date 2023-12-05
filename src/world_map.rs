@@ -60,8 +60,8 @@ pub struct SelectedBuilding {
 
 #[derive(Component)]
 pub struct ZLevel {
-    z_level: i32,
-    tiles: [TileState; MAP_DATA_SIZE],
+    pub z_level: i32,
+    pub tiles: [TileState; MAP_DATA_SIZE],
 }
 
 impl Index<UVec2> for ZLevel {
@@ -105,6 +105,13 @@ impl ZLevel {
                     self.tiles[i].building = building_type;
                 }
             }
+        }
+    }
+
+    pub fn is_tile_walkable(&self, pos: UVec2) -> bool {
+        match two_d_index_to_one_d_index(pos) {
+            Some(i) => return self.tiles[i].building == BuildingType::Tunnel,
+            None => return false,
         }
     }
 }

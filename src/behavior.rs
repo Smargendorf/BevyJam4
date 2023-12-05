@@ -194,6 +194,7 @@ pub fn update_ant_movement(
     mut phers_tiled: Query<(&mut PheromoneTileGroup, &MapPos)>,
     food: Query<&Transform, (With<Food>, Without<Ant>, Without<Pheromone>)>,
     time: Res<Time>,
+    z_level_q: Query<&ZLevel>,
 ) {
     let world_center = world_map_center();
 
@@ -238,16 +239,22 @@ pub fn update_ant_movement(
             * time.delta_seconds();
 
         let potential_position = ant_trans.translation + actual_offset;
-
-        let world_map_size = world_map_size();
-
-        if potential_position.x > world_map_size.x || potential_position.x < 0. {
-            actual_offset.x *= -1.0;
-            ant.secret_desire.x *= -1.0;
-        }
-        if potential_position.y > world_map_size.y || potential_position.y < 0. {
-            actual_offset.y *= -1.0;
-            ant.secret_desire.y *= -1.0;
+        let map_pos_potential = world_pos_to_two_d_index(potential_position.xy());
+        let map_pos_current = world_pos_to_two_d_index(ant_trans.translation.xy());
+        if let Some(z_level) = z_level_q.iter().find(|z_level| z_level.z_level == 0)
+        {
+            let is_potential_tile_walkable = z_level.is_tile_walkable(map_pos_potential);
+            let world_map_size = world_map_size();
+            if potential_position.x > world_map_size.x || potential_position.x < 0. 
+            || (!is_potential_tile_walkable && map_pos_potential.x != map_pos_current.x){
+                actual_offset.x *= -1.0;
+                ant.secret_desire.x *= -1.0;
+            }
+            if potential_position.y > world_map_size.y || potential_position.y < 0. 
+            || (!is_potential_tile_walkable && map_pos_potential.y != map_pos_current.y) {
+                actual_offset.y *= -1.0;
+                ant.secret_desire.y *= -1.0;
+            }
         }
 
         // Do these *before* moving
