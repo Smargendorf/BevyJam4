@@ -32,10 +32,4 @@ impl Default for Ant {
 pub struct GameCamera;
 
 #[derive(Component)]
-pub struct Pheromone {
-    pub kind: PheromoneKind,
-    pub intensity: f32,
-}
-
-#[derive(Component)]
 pub struct Food;

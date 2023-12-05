@@ -4,7 +4,16 @@ use std::f32::consts::{PI, TAU};
 
 use world_map::*;
 
-// TODO: Does each ant need to be able to identify its own "home this way" pheromone?
+#[derive(Component)]
+pub struct Pheromone {
+    pub kind: PheromoneKind,
+    pub intensity: f32,
+    pub death_timer: f32,
+}
+
+#[derive(Component)]
+pub struct PheromoneTileGroup(Vec<Entity>);
+
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub enum PheromoneKind {
     HomeThisWay,
@@ -46,10 +55,12 @@ pub fn decay_pheromones(
     mut pheromones: Query<(Entity, &mut Pheromone)>,
     time: Res<Time>,
 ) {
-    for (entity, mut pheromone) in pheromones.iter_mut() {
-        pheromone.intensity -= time.delta_seconds() * PHEROMONE_DECAY_FACTOR;
+    for (entity, mut pher) in pheromones.iter_mut() {
+        let decay = time.delta_seconds() * PHEROMONE_DECAY_FACTOR;
+        pher.intensity -= decay;
+        pher.death_timer -= decay;
 
-        if pheromone.intensity < 0.0 {
+        if pher.death_timer < 0.0 {
             commands.add(Despawn { entity })
         }
     }
@@ -82,7 +93,8 @@ fn ant_desired_direction(
     ant_trans: &Transform,
     rng: &mut EntropyComponent<ChaCha8Rng>,
     food: &Query<&Transform, (With<Food>, Without<Ant>, Without<Pheromone>)>,
-    pheromones: &Query<(&Transform, &Pheromone), (Without<Ant>, Without<Food>)>,
+    phers_tiled: &mut Query<(&mut PheromoneTileGroup, &MapPos)>,
+    phers: &Query<(&Transform, &Pheromone), (Without<Ant>, Without<Food>)>,
 ) -> Vec2 {
     let dir_vec = ant_trans.forward().xy();
     let ant_dir = (f32::atan2(dir_vec.y, dir_vec.x) + TAU) % TAU;
@@ -100,24 +112,41 @@ fn ant_desired_direction(
     // attractive force from pheromones
 
     let mut cum_dir = ant.secret_desire;
-    for (pher_trans, pheromone) in pheromones.iter() {
-        if !ant_should_follow(ant.state, pheromone.kind) {
+    let neighborhood = get_local_neighborhood(ant_trans.translation.xy());
+
+    for (mut local_phers, tile_pos) in phers_tiled.iter_mut() {
+        if !neighborhood.contains(&tile_pos.0) {
             continue;
         }
 
-        let to_pher = (pher_trans.translation - ant_trans.translation).xy();
+        local_phers.0.retain(|pher_ent| {
+            if let Ok((pher_trans, pheromone)) = phers.get(*pher_ent) {
+                if !ant_should_follow(ant.state, pheromone.kind) {
+                    return true;
+                }
 
-        if to_pher.length() > ant.vision_range {
-            continue;
-        }
+                let to_pher = (pher_trans.translation - ant_trans.translation).xy();
 
-        let angle = (f32::atan2(to_pher.y, to_pher.x) + TAU) % TAU;
+                if to_pher.length() > ant.vision_range {
+                    return true;
+                }
 
-        if !angle_within_bounds(angle, vision_bound_lower, vision_bound_upper) {
-            continue;
-        }
+                let angle = (f32::atan2(to_pher.y, to_pher.x) + TAU) % TAU;
 
-        cum_dir += to_pher.normalize() * pheromone.intensity;
+                if !angle_within_bounds(angle, vision_bound_lower, vision_bound_upper) {
+                    return true;
+                }
+
+                cum_dir += to_pher.normalize() * pheromone.intensity;
+
+                true
+            } else {
+                // Entity was removed, delete here
+                // Yes this is janky, but its better than making the decay code slower
+                // ok maybe it isn't, TODO test this idea
+                false
+            }
+        });
     }
 
     cum_dir = cum_dir.normalize();
@@ -162,6 +191,7 @@ pub fn update_ant_movement(
         (Without<Food>, Without<Pheromone>),
     >,
     pheromones: Query<(&Transform, &Pheromone), (Without<Ant>, Without<Food>)>,
+    mut phers_tiled: Query<(&mut PheromoneTileGroup, &MapPos)>,
     food: Query<&Transform, (With<Food>, Without<Ant>, Without<Pheromone>)>,
     time: Res<Time>,
 ) {
@@ -188,7 +218,14 @@ pub fn update_ant_movement(
         }
 
         let chosen_dir = Vec3::from((
-            ant_desired_direction(&mut ant, &ant_trans, &mut rng, &food, &pheromones),
+            ant_desired_direction(
+                &mut ant,
+                &ant_trans,
+                &mut rng,
+                &food,
+                &mut phers_tiled,
+                &pheromones,
+            ),
             0.0,
         ));
 
@@ -223,49 +260,86 @@ pub fn update_ant_movement(
 
 pub const ANT_POOP_INTERVAL: f32 = 5.0;
 pub const PHER_PROX_DISTANCE: f32 = 5.0;
-pub const PHER_NUDGE_COEF: f32 = 0.3;
+pub const PHER_NUDGE_DAMPING: f32 = 0.3;
+
+pub fn setup_pher_tiles(mut commands: Commands) {
+    for i in 0..MAP_SIZE.x {
+        for j in 0..MAP_SIZE.y {
+            commands.spawn((MapPos(UVec2::new(i, j)), PheromoneTileGroup(vec![])));
+        }
+    }
+}
 
 pub fn spawn_pheromones(
     mut commands: Commands,
-    mut ants: Query<(&Transform, &mut Ant), Without<Pheromone>>,
+    mut ants: Query<(&Transform, &mut Ant), Without<PheromoneTileGroup>>,
     mut phers: Query<(&mut Transform, &mut Pheromone), Without<Ant>>,
+    mut phers_tiled: Query<(&mut PheromoneTileGroup, &MapPos)>,
     time: Res<Time>,
 ) {
     for (ant_trans, mut ant) in ants.iter_mut() {
         if ant.time_until_poop > 0.0 {
             ant.time_until_poop -= time.delta_seconds() * ant.speed;
-        } else {
-            let closest_neighbor = phers
-                .iter_mut()
-                .filter(|(trans, pher)| {
+            continue;
+        }
+
+        let ant_tile_pos = world_pos_to_two_d_index(ant_trans.translation.xy());
+
+        for (mut local_phers, tile_pos) in phers_tiled.iter_mut() {
+            if ant_tile_pos != tile_pos.0 {
+                continue;
+            }
+
+            let result = local_phers
+                .0
+                .iter()
+                .map(|pher_ent| (phers.get(*pher_ent), pher_ent))
+                .filter_map(|(res, pher_ent)| res.map(|x| (x, pher_ent)).ok())
+                .filter(|((trans, pher), _)| {
                     pher.kind == ant.state.pher_to_drop()
                         && (ant_trans.translation - trans.translation).length()
                             <= PHER_PROX_DISTANCE
                 })
-                .reduce(|(t_closest, p_closest), (t_current, p_current)| {
-                    if (ant_trans.translation - t_closest.translation).length()
-                        > (ant_trans.translation - t_closest.translation).length()
-                    {
-                        (t_current, p_current)
-                    } else {
-                        (t_closest, p_closest)
-                    }
-                });
-
-            if let Some((mut pher_trans, mut pher)) = closest_neighbor {
-                let offset = ant_trans.translation - pher_trans.translation;
-                pher_trans.translation +=
-                    (1.0 - (pher.intensity / (pher.intensity + 1.0))) * offset * PHER_NUDGE_COEF;
-
-                pher.intensity += 1.0;
-            } else {
-                commands.spawn(PheromoneBundle {
-                    pheromone: Pheromone {
-                        kind: ant.state.pher_to_drop(),
-                        intensity: 1.0,
+                .reduce(
+                    |((t_closest, p_closest), e_closest), ((t_current, p_current), e_current)| {
+                        if (ant_trans.translation - t_closest.translation).length()
+                            > (ant_trans.translation - t_closest.translation).length()
+                        {
+                            ((t_current, p_current), e_current)
+                        } else {
+                            ((t_closest, p_closest), e_closest)
+                        }
                     },
-                    transform: ant_trans.clone(),
-                });
+                );
+
+            let mut found_to_edit = false;
+
+            if let Some((_, closest_ent)) = result {
+                if let Ok((mut pher_trans, mut pher)) = phers.get_mut(*closest_ent) {
+                    let offset = ant_trans.translation - pher_trans.translation;
+                    pher_trans.translation += (1.0 - (pher.intensity / (pher.intensity + 1.0)))
+                        * offset
+                        * PHER_NUDGE_DAMPING;
+
+                    pher.intensity += 1.0;
+                    pher.death_timer = 1.0;
+
+                    found_to_edit = true;
+                }
+            }
+
+            if !found_to_edit {
+                let pher_ent = commands
+                    .spawn(PheromoneBundle {
+                        pheromone: Pheromone {
+                            kind: ant.state.pher_to_drop(),
+                            intensity: 1.0,
+                            death_timer: 1.0,
+                        },
+                        transform: ant_trans.clone(),
+                    })
+                    .id();
+                local_phers.0.push(pher_ent);
             }
 
             ant.time_until_poop = ANT_POOP_INTERVAL;
