@@ -15,7 +15,7 @@ use bevy_entitiles::{
 };
 
 pub const TILE_SIZE: Vec2 = Vec2::new(16., 16.);
-pub const MAP_SIZE: UVec2 = UVec2::new(1000, 1000);
+pub const MAP_SIZE: UVec2 = UVec2::new(100, 100);
 
 pub fn world_map_size() -> Vec2 {
     return TILE_SIZE * (MAP_SIZE.as_vec2());
@@ -24,17 +24,13 @@ pub fn world_map_size() -> Vec2 {
 pub fn world_map_center() -> Vec2 {
     return world_map_size() / 2.;
 }
+
 pub fn world_map_center_3d() -> Vec3 {
     let center = world_map_center();
     return Vec3::new(center.x, center.y, 0.);
 }
 
-const TUNNEL_COLOR: Vec4 = Vec4::new(0.15, 0.1, 0., 1.);
-const QUEEN_CHAMBER_COLOR: Vec4 = Vec4::new(0.73, 0.12, 63., 1.);
-const FOOD_STORAGE_COLOR: Vec4 = Vec4::new(0.2, 0.73, 0.12, 1.);
-
 const HOVER_COLOR: Vec4 = Vec4::new(0., 0., 0., 0.1);
-
 const NORMAL_COLOR: Vec4 = Vec4::new(1., 1., 1., 1.);
 const NORMAL_TILE_INDEX: u32 = 0;
 
@@ -42,7 +38,7 @@ const NORMAL_TILE_INDEX: u32 = 0;
 pub struct HoveredTile;
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
-enum BuildingType {
+pub enum BuildingType {
     None,
     Tunnel,
     QueenChamber,
@@ -61,12 +57,22 @@ pub struct SelectedBuilding {
 }
 
 #[derive(Component)]
-pub struct Building(BuildingType);
-
-#[derive(Component)]
 pub struct ZLevel {
     z_level: i32,
     buildings: Vec<BuildingType>,
+}
+
+impl ZLevel {
+    pub fn set_area(&mut self, area: URect, building_type: BuildingType) {
+
+        for x in area.min.x .. area.max.x {
+            for y in area.min.y .. area.max.y {
+                if let Some(i) = two_d_index_to_one_d_index(UVec2::new(x, y)) {
+                    self.buildings[i] = building_type;
+                }
+            }
+        }
+    }
 }
 
 #[derive(Component)]
@@ -77,6 +83,16 @@ pub struct BuildingTypeToColorMap(HashMap<BuildingType, Vec4>);
 
 #[derive(Component)]
 pub struct BuildingTypeToTileIndexMap(HashMap<BuildingType, u32>);
+
+#[derive(Resource)]
+pub struct CursorPos(Vec2);
+impl Default for CursorPos {
+    fn default() -> Self {
+        // Initialize the cursor pos at some far away place. It will get updated
+        // correctly when the cursor moves.
+        Self(Vec2::new(-1000.0, -1000.0))
+    }
+}
 
 pub struct WorldMapPlugin;
 
@@ -135,21 +151,22 @@ fn setup(mut commands: Commands, assets_server: Res<AssetServer>) {
         MAP_SIZE.x as usize * MAP_SIZE.y as usize,
         BuildingType::None,
     );
-    commands.spawn(ZLevel {
+
+    let mut z_level = ZLevel {
         z_level: 0,
         buildings: buildings,
-    });
+    };
 
-}
+    let starting_tunnel_size = UVec2::new(5,5);
 
-#[derive(Resource)]
-pub struct CursorPos(Vec2);
-impl Default for CursorPos {
-    fn default() -> Self {
-        // Initialize the cursor pos at some far away place. It will get updated
-        // correctly when the cursor moves.
-        Self(Vec2::new(-1000.0, -1000.0))
-    }
+    z_level.set_area(URect::from_corners(MAP_SIZE/2 - starting_tunnel_size, MAP_SIZE/2 + starting_tunnel_size), BuildingType::Tunnel);
+    commands.spawn(z_level);
+
+    tilemap.fill_rect(
+        &mut commands,
+        FillArea::new(MAP_SIZE/2 - starting_tunnel_size, Some(starting_tunnel_size * 2), &tilemap),
+        &TileBuilder::new(1),
+    );
 }
 
 pub fn get_local_neighborhood(world_pos: Vec2) -> Vec<UVec2> {
