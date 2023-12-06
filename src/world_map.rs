@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::ops::Index;
+use std::ops::{Index, IndexMut};
 
 use bevy::{math::Vec4, render::render_resource::FilterMode};
 
@@ -72,6 +72,12 @@ impl Index<UVec2> for ZLevel {
     }
 }
 
+impl IndexMut<UVec2> for ZLevel {
+    fn index_mut(&mut self, index: UVec2) -> &mut Self::Output {
+        &mut self.tiles[two_d_index_to_one_d_index(index).unwrap()]
+    }
+}
+
 impl ZLevel {
     fn with_level(level: i32) -> ZLevel {
         let default_tile = TileState::default();
@@ -105,8 +111,8 @@ impl ZLevel {
 
 #[derive(Clone)]
 pub struct TileState {
-    building: BuildingType,
-    pher_refs: Vec<Entity>,
+    pub building: BuildingType,
+    pub pher_refs: Vec<Entity>,
 }
 
 impl Default for TileState {

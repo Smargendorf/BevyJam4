@@ -93,7 +93,7 @@ fn ant_desired_direction(
     ant_trans: &Transform,
     rng: &mut EntropyComponent<ChaCha8Rng>,
     food: &Query<&Transform, (With<Food>, Without<Ant>, Without<Pheromone>)>,
-    phers_tiled: &mut Query<(&mut PheromoneTileGroup, &MapPos)>,
+    z_levels: &Query<&ZLevel>,
     phers: &Query<(&Transform, &Pheromone), (Without<Ant>, Without<Food>)>,
 ) -> Vec2 {
     let dir_vec = ant_trans.forward().xy();
@@ -114,39 +114,30 @@ fn ant_desired_direction(
     let mut cum_dir = ant.secret_desire;
     let neighborhood = get_local_neighborhood(ant_trans.translation.xy());
 
-    for (mut local_phers, tile_pos) in phers_tiled.iter_mut() {
-        if !neighborhood.contains(&tile_pos.0) {
-            continue;
-        }
+    for z_level in z_levels.iter() {
+        for tile_pos in neighborhood.iter() {
+            for pher_ent in z_level[*tile_pos].pher_refs.iter() {
+                if let Ok((pher_trans, pher)) = phers.get(*pher_ent) {
+                    if !ant_should_follow(ant.state, pher.kind) {
+                        continue;
+                    }
 
-        local_phers.0.retain(|pher_ent| {
-            if let Ok((pher_trans, pheromone)) = phers.get(*pher_ent) {
-                if !ant_should_follow(ant.state, pheromone.kind) {
-                    return true;
+                    let to_pher = (pher_trans.translation - ant_trans.translation).xy();
+
+                    if to_pher.length() > ant.vision_range {
+                        continue;
+                    }
+
+                    let angle = (f32::atan2(to_pher.y, to_pher.x) + TAU) % TAU;
+
+                    if !angle_within_bounds(angle, vision_bound_lower, vision_bound_upper) {
+                        continue;
+                    }
+
+                    cum_dir += to_pher.normalize() * pher.intensity;
                 }
-
-                let to_pher = (pher_trans.translation - ant_trans.translation).xy();
-
-                if to_pher.length() > ant.vision_range {
-                    return true;
-                }
-
-                let angle = (f32::atan2(to_pher.y, to_pher.x) + TAU) % TAU;
-
-                if !angle_within_bounds(angle, vision_bound_lower, vision_bound_upper) {
-                    return true;
-                }
-
-                cum_dir += to_pher.normalize() * pheromone.intensity;
-
-                true
-            } else {
-                // Entity was removed, delete here
-                // Yes this is janky, but its better than making the decay code slower
-                // ok maybe it isn't, TODO test this idea
-                false
             }
-        });
+        }
     }
 
     cum_dir = cum_dir.normalize();
@@ -191,7 +182,7 @@ pub fn update_ant_movement(
         (Without<Food>, Without<Pheromone>),
     >,
     pheromones: Query<(&Transform, &Pheromone), (Without<Ant>, Without<Food>)>,
-    mut phers_tiled: Query<(&mut PheromoneTileGroup, &MapPos)>,
+    z_levels: Query<&ZLevel>,
     food: Query<&Transform, (With<Food>, Without<Ant>, Without<Pheromone>)>,
     time: Res<Time>,
     z_level_q: Query<&ZLevel>,
@@ -224,7 +215,7 @@ pub fn update_ant_movement(
                 &ant_trans,
                 &mut rng,
                 &food,
-                &mut phers_tiled,
+                &z_levels,
                 &pheromones,
             ),
             0.0,
@@ -284,7 +275,7 @@ pub fn spawn_pheromones(
     mut commands: Commands,
     mut ants: Query<(&Transform, &mut Ant), Without<PheromoneTileGroup>>,
     mut phers: Query<(&mut Transform, &mut Pheromone), Without<Ant>>,
-    mut phers_tiled: Query<(&mut PheromoneTileGroup, &MapPos)>,
+    mut z_levels: Query<&mut ZLevel>,
     time: Res<Time>,
 ) {
     for (ant_trans, mut ant) in ants.iter_mut() {
@@ -293,67 +284,67 @@ pub fn spawn_pheromones(
             continue;
         }
 
-        let ant_tile_pos = world_pos_to_two_d_index(ant_trans.translation.xy());
+        let neighborhood = get_local_neighborhood(ant_trans.translation.xy());
 
-        for (mut local_phers, tile_pos) in phers_tiled.iter_mut() {
-            if ant_tile_pos != tile_pos.0 {
-                continue;
-            }
+        for mut z_level in z_levels.iter_mut() {
+            for tile_pos in neighborhood.iter() {
+                let tile_state = &mut z_level[*tile_pos];
 
-            let result = local_phers
-                .0
-                .iter()
-                .map(|pher_ent| (phers.get(*pher_ent), pher_ent))
-                .filter_map(|(res, pher_ent)| res.map(|x| (x, pher_ent)).ok())
-                .filter(|((trans, pher), _)| {
-                    pher.kind == ant.state.pher_to_drop()
-                        && (ant_trans.translation - trans.translation).length()
-                            <= PHER_PROX_DISTANCE
-                })
-                .reduce(
-                    |((t_closest, p_closest), e_closest), ((t_current, p_current), e_current)| {
-                        if (ant_trans.translation - t_closest.translation).length()
-                            > (ant_trans.translation - t_closest.translation).length()
-                        {
-                            ((t_current, p_current), e_current)
-                        } else {
-                            ((t_closest, p_closest), e_closest)
-                        }
-                    },
-                );
+                let result = tile_state
+                    .pher_refs
+                    .iter()
+                    .map(|pher_ent| (phers.get(*pher_ent), pher_ent))
+                    .filter_map(|(res, pher_ent)| res.map(|x| (x, pher_ent)).ok())
+                    .filter(|((trans, pher), _)| {
+                        pher.kind == ant.state.pher_to_drop()
+                            && (ant_trans.translation - trans.translation).length()
+                                <= PHER_PROX_DISTANCE
+                    })
+                    .reduce(
+                        |((t_closest, p_closest), e_closest),
+                         ((t_current, p_current), e_current)| {
+                            if (ant_trans.translation - t_closest.translation).length()
+                                > (ant_trans.translation - t_closest.translation).length()
+                            {
+                                ((t_current, p_current), e_current)
+                            } else {
+                                ((t_closest, p_closest), e_closest)
+                            }
+                        },
+                    );
+                let mut found_to_edit = false;
 
-            let mut found_to_edit = false;
+                if let Some((_, closest_ent)) = result {
+                    if let Ok((mut pher_trans, mut pher)) = phers.get_mut(*closest_ent) {
+                        let offset = ant_trans.translation - pher_trans.translation;
+                        pher_trans.translation += (1.0 - (pher.intensity / (pher.intensity + 1.0)))
+                            * offset
+                            * PHER_NUDGE_DAMPING;
 
-            if let Some((_, closest_ent)) = result {
-                if let Ok((mut pher_trans, mut pher)) = phers.get_mut(*closest_ent) {
-                    let offset = ant_trans.translation - pher_trans.translation;
-                    pher_trans.translation += (1.0 - (pher.intensity / (pher.intensity + 1.0)))
-                        * offset
-                        * PHER_NUDGE_DAMPING;
+                        pher.intensity += 1.0;
+                        pher.death_timer = 1.0;
 
-                    pher.intensity += 1.0;
-                    pher.death_timer = 1.0;
+                        found_to_edit = true;
+                    }
+                }
 
-                    found_to_edit = true;
+                if !found_to_edit {
+                    let pher_ent = commands
+                        .spawn(PheromoneBundle {
+                            pheromone: Pheromone {
+                                kind: ant.state.pher_to_drop(),
+                                intensity: 1.0,
+                                death_timer: 1.0,
+                            },
+                            transform: ant_trans.clone(),
+                        })
+                        .id();
+                    tile_state.pher_refs.push(pher_ent);
                 }
             }
-
-            if !found_to_edit {
-                let pher_ent = commands
-                    .spawn(PheromoneBundle {
-                        pheromone: Pheromone {
-                            kind: ant.state.pher_to_drop(),
-                            intensity: 1.0,
-                            death_timer: 1.0,
-                        },
-                        transform: ant_trans.clone(),
-                    })
-                    .id();
-                local_phers.0.push(pher_ent);
-            }
-
-            ant.time_until_poop = ANT_POOP_INTERVAL;
         }
+
+        ant.time_until_poop = ANT_POOP_INTERVAL;
     }
 }
 
