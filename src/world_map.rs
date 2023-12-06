@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::ops::Index;
+use std::fmt;
+use strum_macros::EnumIter;
 
 use bevy::{math::Vec4, render::render_resource::FilterMode};
 
@@ -16,7 +18,7 @@ use bevy_entitiles::{
 };
 
 pub const TILE_SIZE: Vec2 = Vec2::new(16., 16.);
-pub const MAP_SIZE: UVec2 = UVec2::new(100, 100);
+pub const MAP_SIZE: UVec2 = UVec2::new(50, 50);
 pub const MAP_DATA_SIZE: usize = (MAP_SIZE.x * MAP_SIZE.y) as usize;
 
 pub fn world_map_size() -> Vec2 {
@@ -39,23 +41,34 @@ const NORMAL_TILE_INDEX: u32 = 0;
 #[derive(Component)]
 pub struct HoveredTile;
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, EnumIter)]
 pub enum BuildingType {
     None,
     Tunnel,
     QueenChamber,
-    FoodStorage,
+    FoodStorage
+}
+
+impl fmt::Display for BuildingType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            BuildingType::None => write!(f, "None"),
+            BuildingType::Tunnel => write!(f, "Tunnel"),
+            BuildingType::QueenChamber => write!(f, "Queen"),
+            BuildingType::FoodStorage => write!(f, "Food"),
+        }
+    }
 }
 
 #[derive(Component)]
-pub struct SelectedZLevel(i32);
+pub struct SelectedZLevel(pub i32);
 
 #[derive(Component)]
 pub struct TileMapZLevel(u32);
 
 #[derive(Component)]
 pub struct SelectedBuilding {
-    selected_type: BuildingType,
+    pub selected_type: BuildingType,
 }
 
 #[derive(Component)]
@@ -161,8 +174,8 @@ fn setup(mut commands: Commands, assets_server: Res<AssetServer>) {
     commands.spawn(BuildingTypeToTileIndexMap(HashMap::from([
         (BuildingType::None, 0),
         (BuildingType::Tunnel, 1),
-        (BuildingType::QueenChamber, 2),
-        (BuildingType::FoodStorage, 3),
+        (BuildingType::QueenChamber, 3),
+        (BuildingType::FoodStorage, 2),
     ])));
 
     let (_, mut tilemap) = TilemapBuilder::new(TileType::Square, MAP_SIZE, TILE_SIZE)
@@ -371,9 +384,9 @@ fn change_selected_building_type(
     if keyboard_input.pressed(KeyCode::Key1) {
         selected_building.selected_type = BuildingType::Tunnel;
     } else if keyboard_input.pressed(KeyCode::Key2) {
-        selected_building.selected_type = BuildingType::FoodStorage;
-    } else if keyboard_input.pressed(KeyCode::Key3) {
         selected_building.selected_type = BuildingType::QueenChamber;
+    } else if keyboard_input.pressed(KeyCode::Key3) {
+        selected_building.selected_type = BuildingType::FoodStorage;
     }
 }
 
