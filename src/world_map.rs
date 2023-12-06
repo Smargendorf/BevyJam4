@@ -84,24 +84,7 @@ impl ZLevel {
             tiles,
         }
     }
-}
 
-#[derive(Clone)]
-pub struct TileState {
-    building: BuildingType,
-    pher_refs: Vec<Entity>,
-}
-
-impl Default for TileState {
-    fn default() -> Self {
-        Self {
-            building: BuildingType::None,
-            pher_refs: vec![],
-        }
-    }
-}
-
-impl ZLevel {
     pub fn set_area(&mut self, area: URect, building_type: BuildingType) {
         for x in area.min.x..area.max.x {
             for y in area.min.y..area.max.y {
@@ -116,6 +99,21 @@ impl ZLevel {
         match two_d_index_to_one_d_index(pos) {
             Some(i) => return self.tiles[i].building == BuildingType::Tunnel,
             None => return false,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct TileState {
+    building: BuildingType,
+    pher_refs: Vec<Entity>,
+}
+
+impl Default for TileState {
+    fn default() -> Self {
+        Self {
+            building: BuildingType::None,
+            pher_refs: vec![],
         }
     }
 }
