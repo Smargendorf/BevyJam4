@@ -12,6 +12,8 @@ bevy_prng = {version = "0.2.0", features = ["rand_chacha"] }
 bevy_rand = "0.4.0"
 rand = "0.8.5"
 rand_core = "0.6.4"
+strum = { version = "0.25", features = ["derive"] }
+strum_macros = "0.25"
 
 [workspace]
 resolver = "2" # Important! wgpu/Bevy needs this!

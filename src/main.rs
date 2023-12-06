@@ -12,6 +12,7 @@ mod resources;
 mod sprite;
 mod util;
 mod world_map;
+mod world_ui;
 
 use components::*;
 use resources::FoodRes;
@@ -81,6 +82,7 @@ fn main() {
         .add_plugins(camera::CameraPlugin)
         .add_plugins(sprite::AnimationTestPlugin)
         .add_plugins(world_map::WorldMapPlugin)
+        .add_plugins(world_ui::WorldUIPlugin)
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .add_systems(Startup, setup)
         .add_systems(Update, bevy::window::close_on_esc)
